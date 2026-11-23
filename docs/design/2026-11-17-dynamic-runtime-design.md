@@ -204,7 +204,7 @@ The mapping spec is a tree with one node for each item of the record, `FILLER` i
 |---|---|
 | `formatVersion` | `1`. |
 | `sourceName` | The name of the copybook. |
-| `sourceHash` | The SHA-256 of the copybook text after `COPY` expansion. For traceability only. |
+| `sourceHash` | The SHA-256 of the declarations of the items of the record, in tree order, after `COPY` expansion. For traceability only. The parser does not keep the expanded text, so a change of a `VALUE` clause, a level 88 item, or another record does not change this hash. |
 | `charset` | A single-byte charset name. Default `IBM037`. |
 | `byteOrder` | `BIG_ENDIAN`. The only value in this version. It is in the spec so that the hash changes if a later version adds a value. |
 | `root` | The node of the `01` record. |
@@ -215,7 +215,7 @@ The mapping spec is a tree with one node for each item of the record, `FILLER` i
 |---|---|
 | `cobolName`, `level` | From the AST. `FILLER` keeps the name `FILLER`. |
 | (all) | The **resolved** values, not the declared clauses. The draft resolves a `USAGE` that a group gives, and the default `TRAILING` sign of a signed item. The node is then complete without the AST. |
-| `blankWhenZero`, `justified`, `edited` | Flags from the AST. The picture text does not show `BLANK WHEN ZERO`, so the flag is necessary. The compiler reports `UNSUPPORTED_TYPE` for `blankWhenZero` and `edited`. `justified` is a warning only, as in the parser. |
+| `blankWhenZero`, `edited` | Flags from the AST. The picture text does not show `BLANK WHEN ZERO`, so the flag is necessary. The compiler reports `UNSUPPORTED_TYPE` for both. The spec has no `justified` flag: the parser keeps no `JUSTIFIED` flag, and the generator ignores the clause. If a later version needs the flag, it adds an optional key that the writer writes only when it is `true`. Then the canonical form and the hash of a spec without the flag do not change, and `formatVersion` stays `1`. |
 | `path` | The qualified path, for example `GET-ACCOUNT.CHECKING-DATA.OVERDRAFT-LIMIT`. Unique in the spec. A `FILLER` gets an index, for example `FILLER#2` **[builder call]**. |
 | `picture` | The picture text, or `null` for a group. |
 | `usage` | `DISPLAY`, `COMP`, `COMP3`, or `COMP5`. |
