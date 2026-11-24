@@ -36,8 +36,8 @@ public record SpecNode(String cobolName, int level, String path, String picture,
         Sign sign, OccursSpec occurs, String redefines, ValueSpec value,
         List<ConditionSpec> conditions, SourceLocation location, String declaration,
         boolean blankWhenZero, boolean edited, String jsonName, FieldDirection direction,
-        JsonType jsonType, String format, TableSpec table, String counter, VariantSpec variant, String javaName,
-        List<SpecNode> children) {
+        JsonType jsonType, String format, TableSpec table, String counter, VariantSpec variant,
+        String javaName, List<SpecNode> children) {
 
     /** Checks the name and the path, and copies the lists. */
     public SpecNode {

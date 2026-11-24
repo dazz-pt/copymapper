@@ -37,8 +37,10 @@ import pt.dazz.copymapper.copybook.spec.MappingSpecs;
  *
  * <pre>
  * copymapper-copybook parse    &lt;copybook&gt; --output model.json [options]
- * copymapper-copybook generate &lt;copybook | model.json | file.mapping.json&gt; --package p --output-dir dir [options]
- * copymapper-copybook draft    &lt;copybook&gt; --record-name R --output file.mapping.json [options]
+ * copymapper-copybook generate &lt;copybook | model.json | file.mapping.json&gt;
+ *     --package p --output-dir dir [options]
+ * copymapper-copybook draft    &lt;copybook&gt; --record-name R
+ *     --output file.mapping.json [options]
  * </pre>
  */
 public final class Main {
