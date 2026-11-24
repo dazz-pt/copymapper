@@ -562,6 +562,23 @@ public final class DataParser {
         }
     }
 
+    /**
+     * Tells if a text is a data name, with the rule of the parser for the name of an item:
+     * one word, without blanks, that is not a number, a literal, or a clause word.
+     *
+     * @param text the text
+     * @return {@code true} if the parser reads the text as the name of an item
+     */
+    public static boolean isDataName(String text) {
+        if (text.chars().anyMatch(Character::isWhitespace)) {
+            return false;
+        }
+        List<Token> tokens = Lexer.tokenize(List.of(new SourceLine("", 1, 1, text, false)),
+            new Diagnostics());
+        return tokens.size() == 1 && tokens.get(0).type() == TokenType.WORD
+            && !isClause(tokens.get(0).text());
+    }
+
     private static boolean isClause(String word) {
         return CLAUSES.contains(word) || isUsage(word);
     }

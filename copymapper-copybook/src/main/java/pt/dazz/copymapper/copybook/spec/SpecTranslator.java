@@ -8,6 +8,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.temporal.TemporalAccessor;
 import java.time.temporal.TemporalQuery;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
@@ -34,6 +35,7 @@ import pt.dazz.copymapper.copybook.diag.Diagnostics;
 import pt.dazz.copymapper.copybook.map.ItemIndex;
 import pt.dazz.copymapper.copybook.map.MappingOptions;
 import pt.dazz.copymapper.copybook.map.SubTypeDecision;
+import pt.dazz.copymapper.copybook.parse.DataParser;
 
 /**
  * Translates a {@link MappingSpec} to the inputs of the copybook generator: a copybook with
@@ -78,6 +80,9 @@ public final class SpecTranslator {
         private final Map<SpecNode, DataItem> items = new IdentityHashMap<>();
         /** The COBOL name of the item that each node redefines. */
         private final Map<SpecNode, QualifiedName> redefined = new IdentityHashMap<>();
+        /** The nodes with a REDEFINES text that names no earlier sibling. */
+        private final Set<SpecNode> unresolved = Collections.newSetFromMap(
+                new IdentityHashMap<>());
         /** The redefined node of each node that redefines a node of the spec. */
         private final Map<SpecNode, SpecNode> bases = new IdentityHashMap<>();
         /** The nodes of each REDEFINES area, the redefined node first, by redefined node. */
@@ -99,6 +104,7 @@ public final class SpecTranslator {
 
         Translation translate() {
             index(spec.root(), null);
+            check(spec.root(), null);
             // A copy of the record with the names only, to find the COBOL names.
             index = new ItemIndex(new Copybook(spec.sourceName(), List.of(shape(spec.root()))));
             redefines(spec.root());
@@ -118,6 +124,40 @@ public final class SpecTranslator {
                 parents.put(node, parent);
             }
             node.children().forEach(child -> index(child, node));
+        }
+
+        /** Checks the names, the levels, and the OCCURS of the COBOL side. */
+        private void check(SpecNode node, SpecNode parent) {
+            dataName(node, "the COBOL name", node.cobolName());
+            node.conditions().forEach(c -> dataName(node, "the condition name", c.name()));
+            int level = node.level();
+            if (parent == null) {
+                if (level != 1) {
+                    error(node, "the level of the record is " + level + ". A record needs the"
+                            + " level 01.");
+                }
+            } else if (level < 2 || level > 49) {
+                error(node, "the level " + level + " is not valid. An item in a group needs a"
+                        + " level from 02 to 49.");
+            } else if (level <= parent.level()) {
+                error(node, "the level " + level + " is not more than the level "
+                        + parent.level() + " of the group " + parent.path());
+            }
+            OccursSpec occurs = node.occurs();
+            if (occurs != null && (occurs.max() < 1 || occurs.min() < 0
+                    || occurs.min() > occurs.max())) {
+                error(node, "OCCURS " + occurs.min() + " TO " + occurs.max() + " is not valid."
+                        + " The maximum must be 1 or more, and the minimum must be from 0 to"
+                        + " the maximum.");
+            }
+            node.children().forEach(child -> check(child, node));
+        }
+
+        private void dataName(SpecNode node, String what, String name) {
+            if (!DataParser.isDataName(name)) {
+                error(node, what + " '" + name + "' is not a data name. Write one COBOL word"
+                        + " that is not a clause word.");
+            }
         }
 
         private DataItem shape(SpecNode node) {
@@ -143,12 +183,17 @@ public final class SpecTranslator {
         /**
          * Gives the name of the redefined item. A spec path must be an earlier sibling without
          * a number. Other text is a COBOL name, as the draft writes it when it cannot resolve
-         * the name.
+         * the name. That name must be the name of an earlier sibling.
          */
         private QualifiedName redefinedName(SpecNode node, List<SpecNode> earlier) {
             String text = node.redefines();
             SpecNode target = byPath.get(text);
             if (target == null) {
+                if (earlier.stream().noneMatch(s -> upper(s.cobolName()).equals(upper(text)))) {
+                    error(node, "the REDEFINES item '" + text + "' is not a path of the spec"
+                            + " and not the name of an earlier sibling");
+                    unresolved.add(node);
+                }
                 return new QualifiedName(List.of(upper(text)));
             }
             if (lastSegment(text).contains("#")) {
@@ -256,20 +301,32 @@ public final class SpecTranslator {
                     text == null ? null : dependingOn(node, text));
         }
 
-        /** Names the counter with a COBOL name, or keeps the text that is not a path. */
+        /**
+         * Names the counter with a COBOL name, or keeps the text that is not a path. That text
+         * must name one item of the record.
+         */
         private QualifiedName dependingOn(SpecNode node, String text) {
             SpecNode target = byPath.get(text);
             if (target != null) {
                 String name = nameOf(node, target);
-                return QualifiedName.parse(name != null ? name : upper(target.cobolName()));
+                return name != null ? new QualifiedName(List.of(name.split(" OF ")))
+                        : new QualifiedName(List.of(upper(target.cobolName())));
             }
+            QualifiedName name;
             try {
-                return QualifiedName.parse(text);
+                name = QualifiedName.parse(text);
             } catch (IllegalArgumentException e) {
-                error(node, "the DEPENDING ON item '" + text + "' is not a path of the spec"
-                        + " and not a COBOL name");
-                return new QualifiedName(List.of(text));
+                name = new QualifiedName(List.of(text));
             }
+            ItemIndex.Lookup lookup = index.find(name);
+            if (lookup instanceof ItemIndex.Ambiguous a) {
+                error(node, "the DEPENDING ON item '" + text + "' names more than one item of"
+                        + " the record: " + String.join(", ", a.matches()));
+            } else if (lookup instanceof ItemIndex.NotFound) {
+                error(node, "the DEPENDING ON item '" + text + "' is not a path of the spec"
+                        + " and not a name in the record");
+            }
+            return name;
         }
 
         private static Condition condition(ConditionSpec spec, SourceLocation at) {
@@ -405,6 +462,10 @@ public final class SpecTranslator {
 
         /** Finds the area of a variant, and checks that the area has one variant only. */
         private void variant(SpecNode node, VariantSpec variant) {
+            if (unresolved.contains(node)) {
+                // The REDEFINES text has an error.
+                return;
+            }
             SpecNode base = node.redefines() == null ? node : bases.get(node);
             List<SpecNode> area = base == null ? null : areas.get(base);
             if (area == null) {

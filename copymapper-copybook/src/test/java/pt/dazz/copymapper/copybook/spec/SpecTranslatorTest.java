@@ -43,6 +43,7 @@ class SpecTranslatorTest {
     /** A mutable copy of a node, to change some components. */
     private static final class Edit {
         String cobolName;
+        int level;
         String picture;
         Usage usage;
         Sign sign;
@@ -64,6 +65,7 @@ class SpecTranslatorTest {
         Edit(SpecNode node) {
             this.node = node;
             cobolName = node.cobolName();
+            level = node.level();
             picture = node.picture();
             usage = node.usage();
             sign = node.sign();
@@ -83,7 +85,7 @@ class SpecTranslatorTest {
         }
 
         SpecNode build(List<SpecNode> children) {
-            return new SpecNode(cobolName, node.level(), node.path(), picture, usage, sign,
+            return new SpecNode(cobolName, level, node.path(), picture, usage, sign,
                     occurs, redefines, node.value(), conditions, location,
                     node.declaration(), blankWhenZero, node.edited(), jsonName, direction,
                     jsonType, format, table, counter, variant, javaName, children);
@@ -312,14 +314,119 @@ class SpecTranslatorTest {
     }
 
     @Test
-    void aDependingOnTextOutsideTheSpecStaysAsWritten() {
+    void aDependingOnTextThatNamesAnItemOfTheRecordStaysAsWritten() {
+        var spec = with(draft("01 R.", "   05 G.", "      10 N PIC 9.",
+                "   05 T OCCURS 1 TO 3 DEPENDING ON N.", "      10 X PIC X."), "R.T", e -> {
+                    e.occurs = new OccursSpec(1, 3, "n of g");
+                    e.counter = "n of g";
+                });
+        DataItem t = item(clean(spec).copybook(), "R.T");
+        assertThat(t.occurs().dependingOn()).isEqualTo(QualifiedName.parse("N OF G"));
+    }
+
+    @Test
+    void aDependingOnTextThatNamesNoItemOfTheRecordIsAnError() {
         var spec = with(draft("01 R.", "   05 N PIC 9.", "   05 T OCCURS 1 TO 3 DEPENDING ON N.",
                 "      10 X PIC X."), "R.T", e -> {
                     e.occurs = new OccursSpec(1, 3, "m of other");
                     e.counter = "m of other";
                 });
-        DataItem t = item(clean(spec).copybook(), "R.T");
-        assertThat(t.occurs().dependingOn()).isEqualTo(QualifiedName.parse("M OF OTHER"));
+        assertThat(errors(SpecTranslator.translate(spec))).containsExactly("ORDER.cpy:3:4:"
+                + " error: R.T: the DEPENDING ON item 'm of other' is not a path of the spec"
+                + " and not a name in the record");
+    }
+
+    @Test
+    void aDependingOnTextThatNamesTwoItemsIsAnError() {
+        var spec = with(draft("01 R.", "   05 G1.", "      10 N PIC 9.", "   05 G2.",
+                "      10 N PIC 9.", "   05 T OCCURS 1 TO 3 DEPENDING ON N OF G1.",
+                "      10 X PIC X."), "R.T", e -> {
+                    e.occurs = new OccursSpec(1, 3, "N");
+                    e.counter = "N";
+                });
+        assertThat(errors(SpecTranslator.translate(spec))).containsExactly("ORDER.cpy:6:4:"
+                + " error: R.T: the DEPENDING ON item 'N' names more than one item of the"
+                + " record: N OF G1 OF R, N OF G2 OF R");
+    }
+
+    // ---- the COBOL names, levels, and OCCURS ----
+
+    private static final String NAMES_ERROR = " is not a data name. Write one COBOL word that"
+            + " is not a clause word.";
+
+    @Test
+    void aNameThatIsNotADataNameIsAnError() {
+        var spec = draft("01 R.", "   05 A PIC X.", "      88 OK VALUE 'Y'.", "   05 B PIC X.");
+        spec = with(spec, "R.A", e -> {
+            e.cobolName = "KIND X";
+            e.conditions = List.of(new ConditionSpec("K A", e.conditions.get(0).values()));
+        });
+        spec = with(spec, "R.B", e -> e.cobolName = "");
+        assertThat(errors(SpecTranslator.translate(spec))).containsExactly(
+                "ORDER.cpy:2:4: error: R.A: the COBOL name 'KIND X'" + NAMES_ERROR,
+                "ORDER.cpy:2:4: error: R.A: the condition name 'K A'" + NAMES_ERROR,
+                "ORDER.cpy:4:4: error: R.B: the COBOL name ''" + NAMES_ERROR);
+    }
+
+    @Test
+    void aCounterWithANameThatIsNotADataNameGivesOneError() {
+        var spec = with(draft("01 R.", "   05 N PIC 9.", "   05 T OCCURS 1 TO 3 DEPENDING ON N.",
+                "      10 X PIC X."), "R.N", e -> e.cobolName = "N X");
+        assertThat(errors(SpecTranslator.translate(spec))).containsExactly(
+                "ORDER.cpy:2:4: error: R.N: the COBOL name 'N X'" + NAMES_ERROR);
+    }
+
+    private static final String[] LEVELS = {"01 R.", "   05 G.", "      10 A PIC X.",
+        "   05 B PIC X."};
+
+    private static List<String> levelErrors(String path, int level) {
+        return errors(SpecTranslator.translate(with(draft(LEVELS), path, e -> e.level = level)));
+    }
+
+    @Test
+    void theRecordNeedsTheLevel01() {
+        assertThat(levelErrors("R", 2)).containsExactly("ORDER.cpy:1:1: error: R: the level of"
+                + " the record is 2. A record needs the level 01.");
+    }
+
+    @Test
+    void anItemInAGroupNeedsALevelFrom02To49() {
+        String needs = " is not valid. An item in a group needs a level from 02 to 49.";
+        assertThat(levelErrors("R.B", 1)).containsExactly(
+                "ORDER.cpy:4:4: error: R.B: the level 1" + needs);
+        assertThat(levelErrors("R.B", 50)).containsExactly(
+                "ORDER.cpy:4:4: error: R.B: the level 50" + needs);
+        assertThat(levelErrors("R.B", 2)).isEmpty();
+        assertThat(levelErrors("R.B", 49)).isEmpty();
+    }
+
+    @Test
+    void anItemNeedsALevelMoreThanTheLevelOfItsGroup() {
+        assertThat(levelErrors("R.G.A", 5)).containsExactly("ORDER.cpy:3:7: error: R.G.A: the"
+                + " level 5 is not more than the level 5 of the group R.G");
+        assertThat(levelErrors("R.G.A", 4)).containsExactly("ORDER.cpy:3:7: error: R.G.A: the"
+                + " level 4 is not more than the level 5 of the group R.G");
+        assertThat(levelErrors("R.G.A", 6)).isEmpty();
+    }
+
+    private static List<String> occursErrors(int min, int max) {
+        return errors(SpecTranslator.translate(with(draft("01 R.", "   05 T OCCURS 3.",
+                "      10 X PIC X."), "R.T", e -> e.occurs = new OccursSpec(min, max, null))));
+    }
+
+    @Test
+    void anOccursNeedsAMaximumOf1OrMoreAndAMinimumFrom0ToTheMaximum() {
+        String needs = " is not valid. The maximum must be 1 or more, and the minimum must be"
+                + " from 0 to the maximum.";
+        assertThat(occursErrors(5, 3)).containsExactly(
+                "ORDER.cpy:2:4: error: R.T: OCCURS 5 TO 3" + needs);
+        assertThat(occursErrors(0, 0)).containsExactly(
+                "ORDER.cpy:2:4: error: R.T: OCCURS 0 TO 0" + needs);
+        assertThat(occursErrors(-1, 3)).containsExactly(
+                "ORDER.cpy:2:4: error: R.T: OCCURS -1 TO 3" + needs);
+        assertThat(occursErrors(0, 1)).isEmpty();
+        assertThat(occursErrors(1, 1)).isEmpty();
+        assertThat(occursErrors(3, 3)).isEmpty();
     }
 
     @Test
@@ -331,7 +438,8 @@ class SpecTranslatorTest {
                 });
         Translation translation = SpecTranslator.translate(spec);
         assertThat(errors(translation)).singleElement().asString()
-                .startsWith("ORDER.cpy:3:4: error: R.T: the DEPENDING ON item ' '");
+                .isEqualTo("ORDER.cpy:3:4: error: R.T: the DEPENDING ON item ' ' is not a path"
+                        + " of the spec and not a name in the record");
         assertThat(item(translation.copybook(), "R.T").occurs().dependingOn())
                 .isEqualTo(new QualifiedName(List.of(" ")));
     }
@@ -361,6 +469,29 @@ class SpecTranslatorTest {
         var text = with(spec, "R.G.B", e -> e.redefines = "a");
         assertThat(item(clean(text).copybook(), "R.G.B").redefines())
                 .isEqualTo(QualifiedName.parse("A"));
+    }
+
+    @Test
+    void aRedefinesTextThatIsNotAnEarlierSiblingIsAnError() {
+        var spec = draft("01 R.", "   05 G.", "      10 A PIC X(2).",
+                "      10 B REDEFINES A PIC 99.", "      10 C PIC X(2).");
+        for (String text : List.of("BOGUS", "c", " ")) {
+            var bogus = with(spec, "R.G.B", e -> e.redefines = text);
+            assertThat(errors(SpecTranslator.translate(bogus))).as(text).containsExactly(
+                    "ORDER.cpy:4:7: error: R.G.B: the REDEFINES item '" + text + "' is not a"
+                            + " path of the spec and not the name of an earlier sibling");
+        }
+    }
+
+    @Test
+    void aVariantOnAnAreaWithAnUnknownRedefinesTextGivesOneError() {
+        var spec = with(draft(AREA), "R.B", e -> {
+            e.redefines = "BOGUS";
+            e.variant = new VariantSpec.FixedSelection("R.A", "R.B");
+        });
+        assertThat(errors(SpecTranslator.translate(spec))).containsExactly("ORDER.cpy:5:4:"
+                + " error: R.B: the REDEFINES item 'BOGUS' is not a path of the spec and not"
+                + " the name of an earlier sibling");
     }
 
     @Test
