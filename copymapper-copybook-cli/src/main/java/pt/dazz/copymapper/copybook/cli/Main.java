@@ -22,15 +22,23 @@ import pt.dazz.copymapper.copybook.json.ModelJson;
 import pt.dazz.copymapper.copybook.json.ModelJsonException;
 import pt.dazz.copymapper.copybook.map.ConditionMode;
 import pt.dazz.copymapper.copybook.map.MappingOptions;
+import pt.dazz.copymapper.copybook.parse.CopybookParser;
 import pt.dazz.copymapper.copybook.parse.ParseOptions;
+import pt.dazz.copymapper.copybook.parse.ParseResult;
 import pt.dazz.copymapper.copybook.parse.SourceFormat;
+import pt.dazz.copymapper.copybook.spec.DraftOptions;
+import pt.dazz.copymapper.copybook.spec.MappingSpec;
+import pt.dazz.copymapper.copybook.spec.MappingSpecFormatException;
+import pt.dazz.copymapper.copybook.spec.MappingSpecJson;
+import pt.dazz.copymapper.copybook.spec.MappingSpecs;
 
 /**
  * The command line of the CopyMapper copybook generator.
  *
  * <pre>
  * copymapper-copybook parse    &lt;copybook&gt; --output model.json [options]
- * copymapper-copybook generate &lt;copybook | model.json&gt; --package p --output-dir dir [options]
+ * copymapper-copybook generate &lt;copybook | model.json | file.mapping.json&gt; --package p --output-dir dir [options]
+ * copymapper-copybook draft    &lt;copybook&gt; --record-name R --output file.mapping.json [options]
  * </pre>
  */
 public final class Main {
@@ -45,14 +53,22 @@ public final class Main {
     static final String HELP = """
         Usage:
           copymapper-copybook parse <copybook> --output <model.json> [options]
-          copymapper-copybook generate <copybook | model.json> --package <name> \
-        --output-dir <dir> [--lombok] [options]
+          copymapper-copybook generate <copybook | model.json | file.mapping.json> \
+        --package <name> --output-dir <dir> [--lombok] [options]
+          copymapper-copybook draft <copybook> --record-name <name> \
+        --output <file.mapping.json> [--data-charset <name>] [options]
+
+        A name that ends with .mapping.json is a mapping spec. The generate command does
+        not accept the options for a copybook input with a model or a mapping spec.
 
         Options for a copybook input:
           --format fixed|free        The reference format. Default: fixed.
           --charset <name>           The charset of the copybook files. Default: UTF-8.
           --copy-dir <dir>           A directory with COPY members. Repeat for more.
           --record-name <name>       The record name for a copybook without level 01.
+                                     For draft: the record to draft.
+          --data-charset <name>      For draft: the charset of the record data in the
+                                     spec. Default: IBM037.
           --strip-prefix <prefix>    A prefix to remove from names, for example WS-.
           --input-marker <word>      A name part that marks an input alternative.
           --output-marker <word>     A name part that marks an output alternative.
@@ -108,8 +124,11 @@ public final class Main {
                 out.print(HELP);
                 return OK;
             }
-            return arguments.command.equals("parse") ? parse(arguments, out, err)
-                : generate(arguments, out, err);
+            return switch (arguments.command) {
+                case "parse" -> parse(arguments, out, err);
+                case "draft" -> draft(arguments, out, err);
+                default -> generate(arguments, out, err);
+            };
         } catch (UsageException e) {
             err.println("error: " + e.getMessage());
             err.println("Run copymapper-copybook --help for the options.");
@@ -152,13 +171,17 @@ public final class Main {
         GenerateOptions options = new GenerateOptions(packageName,
             arguments.lombok || Boolean.TRUE.equals(config.lombok()));
         Copybooks.Result result;
-        if (arguments.modelInput()) {
-            for (String option : Arguments.MODEL_OPTIONS) {
-                if (!arguments.all(option).isEmpty()) {
-                    throw new UsageException("parse and mapping options are not permitted"
-                        + " with a model input");
-                }
+        if (arguments.specInput()) {
+            refuseMappingOptions(arguments, "a mapping spec input");
+            try {
+                result = Copybooks.generate(MappingSpecJson.read(
+                    Files.readString(arguments.input)), options);
+            } catch (MappingSpecFormatException e) {
+                err.println(arguments.input.getFileName() + ": error: " + e.getMessage());
+                return FAILED;
             }
+        } else if (arguments.modelInput()) {
+            refuseMappingOptions(arguments, "a model input");
             try {
                 result = Copybooks.generate(ModelJson.read(Files.readString(arguments.input)),
                     options);
@@ -175,6 +198,49 @@ public final class Main {
         }
         JavaClassGenerator.writeTo(result.files(), Path.of(outputDir));
         out.println("wrote " + result.files().size() + " classes to " + outputDir);
+        return OK;
+    }
+
+    private static void refuseMappingOptions(Arguments arguments, String input) {
+        for (String option : Arguments.MODEL_OPTIONS) {
+            if (!arguments.all(option).isEmpty()) {
+                throw new UsageException("parse and mapping options are not permitted with "
+                    + input);
+            }
+        }
+    }
+
+    private static int draft(Arguments arguments, PrintStream out, PrintStream err)
+        throws IOException {
+        String recordName = arguments.value("--record-name");
+        if (recordName == null) {
+            throw new UsageException("the option --record-name is missing");
+        }
+        String output = arguments.value("--output");
+        if (output == null) {
+            throw new UsageException("the option --output is missing");
+        }
+        String charset = arguments.value("--data-charset");
+        if (charset != null) {
+            charset(charset);
+        }
+        ParseResult parsed = CopybookParser.parse(arguments.input,
+            parseOptions(arguments, config(arguments)));
+        for (Diagnostic diagnostic : parsed.diagnostics()) {
+            err.println(diagnostic.format());
+        }
+        if (parsed.hasErrors()) {
+            return FAILED;
+        }
+        MappingSpec spec;
+        try {
+            spec = MappingSpecs.draft(parsed.copybook(), recordName,
+                charset == null ? DraftOptions.defaults() : new DraftOptions(charset));
+        } catch (IllegalArgumentException e) {
+            throw new UsageException(e.getMessage());
+        }
+        Files.writeString(Path.of(output), MappingSpecJson.write(spec));
+        out.println("wrote the mapping spec of " + recordName + " to " + output);
         return OK;
     }
 

@@ -13,29 +13,30 @@ import java.util.Set;
 final class Arguments {
 
     /** The options that need a value, and the commands that accept them. */
-    private static final Map<String, Set<String>> VALUE_OPTIONS = Map.ofEntries(
-        Map.entry("--format", Set.of("parse", "generate")),
-        Map.entry("--charset", Set.of("parse", "generate")),
-        Map.entry("--copy-dir", Set.of("parse", "generate")),
-        Map.entry("--record-name", Set.of("parse", "generate")),
-        Map.entry("--strip-prefix", Set.of("parse", "generate")),
-        Map.entry("--input-marker", Set.of("parse", "generate")),
-        Map.entry("--output-marker", Set.of("parse", "generate")),
-        Map.entry("--direction", Set.of("parse", "generate")),
-        Map.entry("--conditions", Set.of("parse", "generate")),
-        Map.entry("--count-field", Set.of("parse", "generate")),
-        Map.entry("--max-record-length", Set.of("parse", "generate")),
-        Map.entry("--date", Set.of("parse", "generate")),
-        Map.entry("--continuable", Set.of("parse", "generate")),
-        Map.entry("--validatable", Set.of("parse", "generate")),
-        Map.entry("--empty-item", Set.of("parse", "generate")),
-        Map.entry("--empty-key", Set.of("parse", "generate")),
-        Map.entry("--partial-table", Set.of("parse", "generate")),
-        Map.entry("--view", Set.of("parse", "generate")),
-        Map.entry("--config", Set.of("parse", "generate")),
-        Map.entry("--output", Set.of("parse")),
-        Map.entry("--package", Set.of("generate")),
-        Map.entry("--output-dir", Set.of("generate")));
+    private static final Map<String, List<String>> VALUE_OPTIONS = Map.ofEntries(
+        Map.entry("--format", List.of("parse", "generate", "draft")),
+        Map.entry("--charset", List.of("parse", "generate", "draft")),
+        Map.entry("--copy-dir", List.of("parse", "generate", "draft")),
+        Map.entry("--record-name", List.of("parse", "generate", "draft")),
+        Map.entry("--strip-prefix", List.of("parse", "generate")),
+        Map.entry("--input-marker", List.of("parse", "generate")),
+        Map.entry("--output-marker", List.of("parse", "generate")),
+        Map.entry("--direction", List.of("parse", "generate")),
+        Map.entry("--conditions", List.of("parse", "generate")),
+        Map.entry("--count-field", List.of("parse", "generate")),
+        Map.entry("--max-record-length", List.of("parse", "generate")),
+        Map.entry("--date", List.of("parse", "generate")),
+        Map.entry("--continuable", List.of("parse", "generate")),
+        Map.entry("--validatable", List.of("parse", "generate")),
+        Map.entry("--empty-item", List.of("parse", "generate")),
+        Map.entry("--empty-key", List.of("parse", "generate")),
+        Map.entry("--partial-table", List.of("parse", "generate")),
+        Map.entry("--view", List.of("parse", "generate")),
+        Map.entry("--config", List.of("parse", "generate")),
+        Map.entry("--output", List.of("parse", "draft")),
+        Map.entry("--data-charset", List.of("draft")),
+        Map.entry("--package", List.of("generate")),
+        Map.entry("--output-dir", List.of("generate")));
 
     /** The options that change the parse or map step. A model input does not accept them. */
     static final Set<String> MODEL_OPTIONS = Set.of("--format", "--charset", "--copy-dir",
@@ -69,9 +70,10 @@ final class Arguments {
             throw new UsageException("the command is missing");
         }
         String command = list.get(0);
-        if (!command.equals("parse") && !command.equals("generate")) {
+        if (!command.equals("parse") && !command.equals("generate")
+            && !command.equals("draft")) {
             throw new UsageException("unknown command '" + command
-                + "'. Use parse or generate.");
+                + "'. Use parse, generate, or draft.");
         }
         Path input = null;
         List<String[]> options = new ArrayList<>();
@@ -108,13 +110,13 @@ final class Arguments {
             lombok = true;
             return;
         }
-        Set<String> commands = VALUE_OPTIONS.get(name);
+        List<String> commands = VALUE_OPTIONS.get(name);
         if (commands == null) {
             throw new UsageException("unknown option " + name);
         }
         if (!commands.contains(command)) {
             throw new UsageException("the option " + name + " is only for "
-                + commands.iterator().next());
+                + String.join(" or ", commands));
         }
         values.computeIfAbsent(name, key -> new ArrayList<>()).add(value);
     }
@@ -128,6 +130,12 @@ final class Arguments {
     /** Gives all values of an option. */
     List<String> all(String name) {
         return values.getOrDefault(name, List.of());
+    }
+
+    /** Tells if the input is a mapping spec file. */
+    boolean specInput() {
+        return input.getFileName().toString().toLowerCase(java.util.Locale.ROOT)
+            .endsWith(".mapping.json");
     }
 
     /** Tells if the input is a model JSON file. */

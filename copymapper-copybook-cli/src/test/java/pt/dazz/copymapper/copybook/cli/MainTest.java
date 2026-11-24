@@ -12,6 +12,8 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import pt.dazz.copymapper.copybook.spec.MappingSpec;
+import pt.dazz.copymapper.copybook.spec.MappingSpecJson;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -358,17 +360,104 @@ class MainTest {
         assertThat(err()).doesNotContain("warning:");
     }
 
+    private Path draftOf(String resource, String record) {
+        Path spec = dir.resolve(record + ".mapping.json");
+        assertThat(run("draft", resource(resource), "--record-name", record, "--output",
+            spec.toString())).isEqualTo(Main.OK);
+        return spec;
+    }
+
+    @Test
+    void generateFromASpecGivesTheClassesOfTheCopybook() throws IOException {
+        Path spec = draftOf("ORDERS.cpy", "LIST-ORDERS");
+        assertThat(out()).contains("wrote the mapping spec of LIST-ORDERS to");
+        Path fromSpec = dir.resolve("spec");
+        Path fromCopybook = dir.resolve("copybook");
+        assertThat(run("generate", spec.toString(), "--package", "com.example.orders",
+            "--output-dir", fromSpec.toString())).isEqualTo(Main.OK);
+        assertThat(run("generate", resource("ORDERS.cpy"), "--package", "com.example.orders",
+            "--output-dir", fromCopybook.toString())).isEqualTo(Main.OK);
+        try (var files = Files.walk(fromCopybook)) {
+            for (Path file : files.filter(Files::isRegularFile).toList()) {
+                assertThat(Files.readString(fromSpec.resolve(fromCopybook.relativize(file))))
+                    .isEqualTo(Files.readString(file));
+            }
+        }
+        assertThat(out()).contains("wrote 3 classes to");
+    }
+
+    @Test
+    void draftWritesASpecThatCanBeRead() throws IOException {
+        Path spec = dir.resolve("a.mapping.json");
+        assertThat(run("draft", resource("ACCOUNT.cpy"), "--record-name", "get-account",
+            "--data-charset", "IBM1047", "--output", spec.toString())).isEqualTo(Main.OK);
+        MappingSpec read = MappingSpecJson.read(Files.readString(spec));
+        assertThat(read.charset()).isEqualTo("IBM1047");
+        assertThat(read.root().cobolName()).isEqualTo("GET-ACCOUNT");
+    }
+
+    @Test
+    void draftWithAnUnknownRecordIsAUsageError() {
+        assertThat(run("draft", resource("ACCOUNT.cpy"), "--record-name", "NOPE", "--output",
+            dir.resolve("a.mapping.json").toString())).isEqualTo(Main.USAGE);
+        assertThat(err()).contains("error: no record is named NOPE. The records are:"
+            + " GET-ACCOUNT");
+        assertThat(dir.resolve("a.mapping.json")).doesNotExist();
+    }
+
+    @Test
+    void draftWithACopybookErrorGivesExitCode1() throws IOException {
+        Path copybook = dir.resolve("BAD.cpy");
+        Files.writeString(copybook, "       01  BAD.\n           05  A PIC Z*9.");
+        assertThat(run("draft", copybook.toString(), "--record-name", "BAD", "--output",
+            dir.resolve("b.mapping.json").toString())).isEqualTo(Main.FAILED);
+        assertThat(err()).contains("BAD.cpy:2:22: error:");
+    }
+
+    @Test
+    void aSpecWithAnErrorGivesExitCode1AndADiagnostic() throws IOException {
+        Path spec = draftOf("ACCOUNT.cpy", "GET-ACCOUNT");
+        String json = Files.readString(spec);
+        assertThat(json).contains("\"cobolName\":\"ACCOUNT-ID\",");
+        Files.writeString(spec, json.replace("\"cobolName\":\"ACCOUNT-ID\",",
+            "\"cobolName\":\"ACCOUNT-ID\", \"javaName\" : \"not a name\","));
+        assertThat(run("generate", spec.toString(), "--package", "a", "--output-dir",
+            dir.toString())).isEqualTo(Main.FAILED);
+        assertThat(err()).containsPattern("ACCOUNT\\.cpy:\\d+:\\d+: error: GET-ACCOUNT\\.ACCOUNT-ID");
+    }
+
+    @Test
+    void anInvalidSpecGivesExitCode1() throws IOException {
+        Path spec = dir.resolve("broken.mapping.json");
+        Files.writeString(spec, "{}");
+        assertThat(run("generate", spec.toString(), "--package", "a", "--output-dir",
+            dir.toString())).isEqualTo(Main.FAILED);
+        assertThat(err()).startsWith("broken.mapping.json: error: ");
+    }
+
     @ParameterizedTest
     @CsvSource(delimiter = '|', value = {
         "|the command is missing",
-        "build ORDERS.cpy|unknown command 'build'. Use parse or generate.",
+        "build ORDERS.cpy|unknown command 'build'. Use parse, generate, or draft.",
         "parse|the input file is missing",
         "parse A.cpy B.cpy|only one input file is permitted",
         "parse A.cpy --output|the option --output needs a value",
         "parse A.cpy --colour red|unknown option --colour",
         "parse A.cpy --package a|the option --package is only for generate",
+        "draft A.cpy --lombok|the option --lombok is only for generate",
+        "draft A.cpy --output a.mapping.json|the option --record-name is missing",
+        "draft A.cpy --record-name A|the option --output is missing",
+        "draft A.cpy --record-name A --output a.json --data-charset NOPE|unknown charset"
+            + " 'NOPE'",
+        "draft A.cpy --record-name A --output a.json --package a|the option --package is only"
+            + " for generate",
+        "parse A.cpy --data-charset IBM037|the option --data-charset is only for draft",
+        "generate A.mapping.json --package a --output-dir x --format free|parse and mapping"
+            + " options are not permitted with a mapping spec input",
+        "generate A.mapping.json --package a --output-dir x --count-field A=B|parse and"
+            + " mapping options are not permitted with a mapping spec input",
         "parse A.cpy --lombok|the option --lombok is only for generate",
-        "generate A.cpy --output a.json|the option --output is only for parse",
+        "generate A.cpy --output a.json|the option --output is only for parse or draft",
         "parse A.cpy|the option --output is missing",
         "generate A.cpy --output-dir x|the option --package is missing",
         "generate A.cpy --package a|the option --output-dir is missing",

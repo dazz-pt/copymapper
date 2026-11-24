@@ -33,7 +33,8 @@ The examples on this page use the name `copymapper-copybook`. Without the alias,
 
 ```
 copymapper-copybook parse <copybook> --output <model.json> [options]
-copymapper-copybook generate <copybook | model.json> --package <name> --output-dir <dir> [--lombok] [options]
+copymapper-copybook generate <copybook | model.json | file.mapping.json> --package <name> --output-dir <dir> [--lombok] [options]
+copymapper-copybook draft <copybook> --record-name <name> --output <file.mapping.json> [options]
 copymapper-copybook --help
 ```
 
@@ -42,29 +43,32 @@ copymapper-copybook --help
 | `parse <copybook> --output <model.json>` | Writes the model JSON. It writes no Java. |
 | `generate <copybook> --package <name> --output-dir <dir>` | Writes the Java classes of a copybook. |
 | `generate <model.json> --package <name> --output-dir <dir>` | Writes the Java classes of a model JSON file. |
+| `generate <file.mapping.json> --package <name> --output-dir <dir>` | Writes the Java classes of a mapping spec. |
+| `draft <copybook> --record-name <name> --output <file.mapping.json>` | Writes a mapping spec for one record of a copybook. It writes no Java. |
 | `--help`, `-h` | Shows the usage, with the exit code 0. The option works at any position. |
 
-A `generate` input that ends with `.json` is a model. Each other input is a copybook.
+A `generate` input that ends with `.mapping.json` is a mapping spec. Each other input that ends with `.json` is a model. Each other input is a copybook.
 `generate` writes the classes in package directories under `--output-dir`. It replaces the existing files with the same name. It does not delete other files.
 
 ## Options
 
 | Option | Commands | Meaning |
 |---|---|---|
-| `--output <file>` | `parse` | The model JSON file to write. Mandatory for `parse`. |
+| `--output <file>` | `parse`, `draft` | The file to write: the model JSON for `parse`, the mapping spec for `draft`. Mandatory. |
+| `--data-charset <name>` | `draft` | The charset of the record data, written in the spec. Default: `IBM037`. |
 | `--package <name>` | `generate` | The Java package of the classes. Mandatory, unless the options file sets `package`. |
 | `--output-dir <dir>` | `generate` | The root directory for the Java files. Mandatory for `generate`. |
 | `--lombok` | `generate` | Write Lombok annotations (`@Data`, `@NoArgsConstructor`) instead of getters and setters. |
-| `--format fixed\|free` | both | The reference format. Default: `fixed`. See [Source format](Copybook-generator#source-format). |
+| `--format fixed\|free` | `parse`, `generate`, `draft` | The reference format. Default: `fixed`. See [Source format](Copybook-generator#source-format). |
 | `--charset <name>` | both | The charset of the copybook files. Default: UTF-8. |
 | `--copy-dir <dir>` | both | A directory with `COPY` members. Repeat the option for more directories. |
-| `--record-name <name>` | both | The record name for a copybook without level `01`. Default: the file name. |
+| `--record-name <name>` | both | The record name for a copybook without level `01`. Default: the file name. For `draft`: the record to draft. Mandatory for `draft`. |
 | `--strip-prefix <prefix>` | both | A prefix to remove from names, for example `WS-`. Repeat the option for more prefixes. |
 | `--input-marker <word>` | both | A name part that marks an input alternative. Write it in upper case. Repeat the option for more words. |
 | `--output-marker <word>` | both | A name part that marks an output alternative. Write it in upper case. Repeat the option for more words. |
 | `--direction <name>=<direction>` | both | The direction (`INPUT`, `OUTPUT`, or `INPUT_OUTPUT`) of a `REDEFINES` alternative. The direction is not case-sensitive. Repeat the option for more alternatives. |
 | `--count-field <table>=<field>` | both | The count field of a fixed table (`OCCURS n`). The generator writes `dependsOn` on the table. Repeat the option for more tables. See [Count field of a fixed table](Copybook-generator#count-field-of-a-fixed-table). |
-| `--empty-item <table>=SPACES\|LOW-VALUES` | both | The bytes of an unused entry of a fixed table. The generator writes `emptyItem` on the table. Repeat the option for more tables. See [Empty entries of a fixed table](Copybook-generator#empty-entries-of-a-fixed-table). |
+| `--empty-item <table>=SPACES\|LOW-VALUES` | `parse`, `generate` | The bytes of an unused entry of a fixed table. The generator writes `emptyItem` on the table. Repeat the option for more tables. See [Empty entries of a fixed table](Copybook-generator#empty-entries-of-a-fixed-table). |
 | `--empty-key <table>=<item>` | both | The key item that marks an empty entry of a fixed table. The generator writes `emptyKey` on the table. Repeat the option for more tables. |
 | `--partial-table <table>` | both | A fixed table that a response can end inside, on an entry boundary. The generator writes `partial = true` on the table. Repeat the option for more tables. See [Partial tables](Copybook-generator#partial-tables). |
 | `--view <item>` | both | A `REDEFINES` area to map to views: the redefined item or an alternative. Repeat the option for more areas. See [Views](Copybook-generator#views). |
@@ -75,8 +79,9 @@ A `generate` input that ends with `.json` is a model. Each other input is a copy
 | `--validatable <record>=<class>` | both | The handler class of a `Validatable` record. |
 | `--config <file.json>` | both | An [options file](Copybook-generator#options-file) with all options. |
 
-With a model input, the parse and mapping options (`--format` to `--validatable`, `--empty-item`, `--empty-key`, `--partial-table`, and `--view`) are not permitted. The model already contains their result.
+With a model input or a mapping spec input, the parse and mapping options (`--format` to `--validatable`, `--empty-item`, `--empty-key`, `--partial-table`, and `--view`) are not permitted. The model or the spec already contains their result.
 With a model input, the generator uses only `package` and `lombok` from the options file. It ignores the other keys.
+With a mapping spec input, the generator uses the options `--package`, `--output-dir`, and `--lombok`. The `--config` option gives only `package` and `lombok`.
 If you give a single-value option two times, the last value applies.
 
 ### Options file and command line together
@@ -265,6 +270,22 @@ copymapper-copybook generate QUERY-INVOICE.cpy --package com.example.billing --o
 ```
 
 See [Views](Copybook-generator#views).
+
+### Draft a mapping spec and generate from it
+
+Write a mapping spec for one record. The command prints an error if the record name is not in the copybook, and it lists the names found:
+
+```bash
+copymapper-copybook draft ACCOUNT.cpy --record-name GET-ACCOUNT --output account.mapping.json
+```
+
+Edit the spec. Then generate the classes from it:
+
+```bash
+copymapper-copybook generate account.mapping.json --package com.example.account --output-dir src/main/java
+```
+
+A decision in the spec that the generator cannot use gives an error with the file, the line, and the column of the copybook item. The command writes no file.
 
 ### Keep the model and compare it
 
