@@ -17,7 +17,7 @@ class SpecNodeTest {
 
     private static SpecNode node(String name, List<ConditionSpec> conditions,
             List<SpecNode> children) {
-        return new SpecNode(name, 5, name, null, null, null, null, null, null, conditions, null,
+        return new SpecNode(name, 5, name, null, null, null, null, null, null, conditions, null, null,
                 false, false, null, null, null, null, null, null, null, null, children);
     }
 
@@ -51,7 +51,7 @@ class SpecNodeTest {
     @Test
     void rejectsANullPath() {
         var thrown = assertThrows(NullPointerException.class, () -> new SpecNode("A", 5, null,
-                null, null, null, null, null, null, List.of(), null, false, false, null, null,
+                null, null, null, null, null, null, List.of(), null, null, false, false, null, null,
                 null, null, null, null, null, null, List.of()));
         assertEquals("path", thrown.getMessage());
     }

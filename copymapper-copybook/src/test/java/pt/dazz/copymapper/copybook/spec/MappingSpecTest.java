@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 class MappingSpecTest {
 
     private static SpecNode root() {
-        return new SpecNode("ROOT", 1, "ROOT", null, null, null, null, null, null, List.of(), null,
+        return new SpecNode("ROOT", 1, "ROOT", null, null, null, null, null, null, List.of(), null, null,
                 false, false, null, null, null, null, null, null, null, null, List.of());
     }
 

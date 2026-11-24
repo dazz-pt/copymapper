@@ -16,7 +16,7 @@ class MappingSpecJsonTest {
     private static SpecNode node(String name, int level, String path, String picture,
             Usage usage, List<SpecNode> children) {
         return new SpecNode(name, level, path, picture, usage, null, null, null, null, List.of(),
-                null, false, false, null, null, null, null, null, null, null, null, children);
+                null, null, false, false, null, null, null, null, null, null, null, null, children);
     }
 
     private static MappingSpec spec(SpecNode root) {
@@ -41,21 +41,22 @@ class MappingSpecJsonTest {
                 new ConditionRange(new ValueSpec("TEXT", "A"), null),
                 new ConditionRange(new ValueSpec("NUMBER", "1"), new ValueSpec("NUMBER", "9"))));
         var alt = new SpecNode("A", 10, "R.A", "X(4)", Usage.DISPLAY, null, null, "R.B", null,
-                List.of(), null, false, false, null, null, null, null, null, null,
+                List.of(), null, null, false, false, null, null, null, null, null, null,
                 new VariantSpec.FixedSelection("R.A", null), null, List.of());
         var leaf = new SpecNode("AMOUNT", 10, "R.AMOUNT", "S9(5)V99", Usage.DISPLAY,
                 Sign.TRAILING_SEPARATE, new OccursSpec(1, 5, "R.COUNT"), "R.OTHER",
                 new ValueSpec("FIGURATIVE", "ZERO"), List.of(condition),
-                new SourceLocation("ACCOUNT.cpy", 12, 8), true, true, "amount",
+                new SourceLocation("ACCOUNT.cpy", 12, 8),
+                "10 AMOUNT PIC S9(5)V99.", true, true, "amount",
                 FieldDirection.INPUT_OUTPUT, JsonType.DECIMAL_STRING, "#,##0.00",
                 new TableSpec(TableMode.KEY, "R.KEY"), "R.COUNT",
                 new VariantSpec.Discriminator("R.TYPE", values), "amountValue", List.of(alt));
         var counted = new SpecNode("ROWS", 10, "R.ROWS", null, null, null, null, null, null,
-                List.of(), null, false, false, null, FieldDirection.OUTPUT, JsonType.TEXT, null,
+                List.of(), null, null, false, false, null, FieldDirection.OUTPUT, JsonType.TEXT, null,
                 new TableSpec(TableMode.COUNT, "R.N"), null,
                 new VariantSpec.FixedSelection(null, "R.B"), null, List.of());
         var marker = new SpecNode("MARK", 10, "R.MARK", null, null, null, null, null, null,
-                List.of(), null, false, false, null, FieldDirection.DERIVED, JsonType.DATE_TIME,
+                List.of(), null, null, false, false, null, FieldDirection.DERIVED, JsonType.DATE_TIME,
                 null, new TableSpec(TableMode.LOW_VALUES, null), null,
                 new VariantSpec.FixedSelection("R.A", "R.B"), null, List.of());
         var root = node("R", 1, "R", null, null, List.of(leaf, counted, marker));
@@ -94,17 +95,31 @@ class MappingSpecJsonTest {
     void omitsNullsFalseAndEmptyLists() {
         String json = MappingSpecJson.write(account());
         assertThat(json).doesNotContain("\"sign\"", "\"blankWhenZero\"", "\"conditions\"",
-                "\"edited\"", "null", "\"occurs\"");
+                "\"edited\"", "null", "\"occurs\"", "\"declaration\"");
         assertThat(json).contains("\"sourceName\"");
     }
 
     @Test
     void writesTheTrueFlags() {
         var leaf = new SpecNode("A", 5, "R.A", "X", Usage.DISPLAY, null, null, null, null,
-                List.of(), null, true, true, null, null, null, null, null, null, null, null,
+                List.of(), null, null, true, true, null, null, null, null, null, null, null, null,
                 List.of());
         String json = MappingSpecJson.write(spec(node("R", 1, "R", null, null, List.of(leaf))));
         assertThat(json).contains("\"blankWhenZero\":true", "\"edited\":true");
+    }
+
+    @Test
+    void roundTripsTheDeclaration() {
+        var read = MappingSpecJson.read(MappingSpecJson.write(everything()));
+        assertThat(read.root().children().get(0).declaration())
+                .isEqualTo("10 AMOUNT PIC S9(5)V99.");
+        assertThat(read.root().children().get(1).declaration()).isNull();
+    }
+
+    @Test
+    void writesTheDeclarationRightAfterTheLocation() {
+        assertThat(MappingSpecJson.write(everything())).contains(
+                "\"column\":8},\"declaration\":\"10 AMOUNT PIC S9(5)V99.\",\"blankWhenZero\"");
     }
 
     @Test
@@ -115,7 +130,7 @@ class MappingSpecJsonTest {
     @Test
     void freezesTheHashOfEveryComponent() {
         assertThat(MappingSpecJson.sha256(everything())).isEqualTo(
-                "2f6c8fd1a7cbd80d246b987bf5bc96a34890f53ee393117d61b36845ab85ee0c");
+                "9096589ad7727987cd3ba91b5502c872d9d5d8c18962632c82419be43ad8c0f3");
     }
 
     private static String account(String replace, String with) {
@@ -274,7 +289,7 @@ class MappingSpecJsonTest {
         order.put("Z", "R.Z");
         order.put("A", "R.A");
         var variant = new VariantSpec.Discriminator("R.T", order);
-        var root = new SpecNode("R", 1, "R", null, null, null, null, null, null, List.of(), null,
+        var root = new SpecNode("R", 1, "R", null, null, null, null, null, null, List.of(), null, null,
                 false, false, null, null, null, null, null, null, variant, null, List.of());
         var read = MappingSpecJson.read(MappingSpecJson.write(spec(root)));
         assertThat(((VariantSpec.Discriminator) read.root().variant()).values().keySet())

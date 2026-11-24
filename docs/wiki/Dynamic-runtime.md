@@ -52,6 +52,7 @@ A node has these keys, in this order. Each key is optional, except `cobolName`, 
 | `value` | An object with `kind` (`TEXT`, `NUMBER`, or `FIGURATIVE`) and `text`. |
 | `conditions` | A list of objects with `name` and `values`. Each value is an object with `from` and the optional `thru`, as `value`. |
 | `location` | An object with `source`, `line`, and `column`. |
+| `declaration` | The COBOL declaration of the item, as the parser normalizes it. Optional. The generator writes it as the Javadoc of the field. |
 | `blankWhenZero` | `true` for `BLANK WHEN ZERO`. |
 | `edited` | `true` for a picture with edit symbols, for example `ZZ9.99`. |
 | `jsonName` | The JSON name. |

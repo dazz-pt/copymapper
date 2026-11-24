@@ -225,6 +225,7 @@ The mapping spec is a tree with one node for each item of the record, `FILLER` i
 | `value` | The `VALUE` literal, or `null`. |
 | `conditions` | The level 88 items: name and values. |
 | `location` | The source name, the line, and the column. |
+| `declaration` | The COBOL declaration of the item, as the parser normalizes it. Optional. The generator writes it as the Javadoc of the field. |
 | `children` | The child nodes, in order. |
 
 **Node: the REST side** (default values from the draft, changed by the operator):

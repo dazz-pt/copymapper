@@ -19,6 +19,7 @@ import pt.dazz.copymapper.copybook.ast.Usage;
  * @param value the VALUE, or null
  * @param conditions the condition names
  * @param location the place in the source, or null
+ * @param declaration the COBOL declaration as the parser normalizes it, or null
  * @param blankWhenZero true for BLANK WHEN ZERO
  * @param edited true for an edited picture
  * @param jsonName the JSON name, or null
@@ -33,9 +34,9 @@ import pt.dazz.copymapper.copybook.ast.Usage;
  */
 public record SpecNode(String cobolName, int level, String path, String picture, Usage usage,
         Sign sign, OccursSpec occurs, String redefines, ValueSpec value,
-        List<ConditionSpec> conditions, SourceLocation location, boolean blankWhenZero,
-        boolean edited, String jsonName, FieldDirection direction, JsonType jsonType,
-        String format, TableSpec table, String counter, VariantSpec variant, String javaName,
+        List<ConditionSpec> conditions, SourceLocation location, String declaration,
+        boolean blankWhenZero, boolean edited, String jsonName, FieldDirection direction,
+        JsonType jsonType, String format, TableSpec table, String counter, VariantSpec variant, String javaName,
         List<SpecNode> children) {
 
     /** Checks the name and the path, and copies the lists. */

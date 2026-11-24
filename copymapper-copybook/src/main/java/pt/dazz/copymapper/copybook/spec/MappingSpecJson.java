@@ -34,8 +34,8 @@ public final class MappingSpecJson {
             "sourceHash", "charset", "byteOrder", "root");
     private static final Set<String> NODE_KEYS = Set.of("cobolName", "level", "path", "picture",
             "usage", "sign", "occurs", "redefines", "value", "conditions", "location",
-            "blankWhenZero", "edited", "jsonName", "direction", "jsonType", "format", "table",
-            "counter", "variant", "javaName", "children");
+            "declaration", "blankWhenZero", "edited", "jsonName", "direction", "jsonType", "format",
+            "table", "counter", "variant", "javaName", "children");
     private static final Set<String> OCCURS_KEYS = Set.of("min", "max", "dependingOn");
     private static final Set<String> VALUE_KEYS = Set.of("kind", "text");
     private static final Set<String> CONDITION_KEYS = Set.of("name", "values");
@@ -122,6 +122,7 @@ public final class MappingSpecJson {
                     .put("line", node.location().line())
                     .put("column", node.location().column());
         }
+        putIf(out, "declaration", node.declaration());
         putTrue(out, "blankWhenZero", node.blankWhenZero());
         putTrue(out, "edited", node.edited());
         putIf(out, "jsonName", node.jsonName());
@@ -254,7 +255,8 @@ public final class MappingSpecJson {
                 o.optionalText("picture"), enumOrNull(o, "usage", Usage.class),
                 enumOrNull(o, "sign", Sign.class), readOccurs(o), o.optionalText("redefines"),
                 o.has("value") ? readValue(o.node("value"), o.path("value")) : null,
-                readConditions(o), readLocation(o), flag(o, "blankWhenZero"), flag(o, "edited"),
+                readConditions(o), readLocation(o), o.optionalText("declaration"),
+                flag(o, "blankWhenZero"), flag(o, "edited"),
                 o.optionalText("jsonName"), enumOrNull(o, "direction", FieldDirection.class),
                 enumOrNull(o, "jsonType", JsonType.class), o.optionalText("format"),
                 readTable(o), o.optionalText("counter"), readVariant(o),

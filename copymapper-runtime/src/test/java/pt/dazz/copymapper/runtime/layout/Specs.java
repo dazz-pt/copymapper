@@ -193,7 +193,8 @@ final class Specs {
 
         SpecNode build() {
             return new SpecNode(n.cobolName(), level, path, picture, usage, sign,
-                    occurs, redefines, n.value(), n.conditions(), n.location(), blankWhenZero,
+                    occurs, redefines, n.value(), n.conditions(), n.location(),
+                    n.declaration(), blankWhenZero,
                     edited, jsonName, direction, jsonType, format, table, counter,
                     variant, n.javaName(), children);
         }
