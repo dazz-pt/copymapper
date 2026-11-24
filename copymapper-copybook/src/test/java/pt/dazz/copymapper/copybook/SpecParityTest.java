@@ -27,6 +27,7 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
+import pt.dazz.copymapper.annotation.Direction;
 import pt.dazz.copymapper.convert.CodecContext;
 import pt.dazz.copymapper.copybook.ast.Copybook;
 import pt.dazz.copymapper.copybook.ast.DataItem;
@@ -93,6 +94,11 @@ class SpecParityTest {
                 .on("GET-ACCOUNT.CHECKING-DATA", variant(account()))
                 .on("GET-ACCOUNT.SAVINGS-DATA", javaName("SavingsAccount")).map()),
             new Case("INVOICE.cpy: name markers", "INVOICE.cpy", mappingOptions("INVOICE.cpy"),
+                new Decisions().on("GET-INVOICE.INVOICE-REQUEST", variant(invoice())).map()),
+            new Case("INVOICE.cpy: explicit directions", "INVOICE.cpy",
+                new MappingOptions(List.of(), List.of(), List.of(), Map.of(
+                    "INVOICE-REQUEST", Direction.INPUT, "INVOICE-RESPONSE", Direction.OUTPUT),
+                    Map.of()),
                 new Decisions().on("GET-INVOICE.INVOICE-REQUEST", variant(invoice())).map()),
             new Case("INVOICE.cpy: name markers and a date", "INVOICE.cpy",
                 mappingOptions("INVOICE.cpy").withHints(Map.of("*-DATE", "yyyyMMdd"),
@@ -225,6 +231,17 @@ class SpecParityTest {
         Set<String> covered = cases().map(Case::copybook)
             .collect(Collectors.toCollection(TreeSet::new));
         assertThat(covered).isEqualTo(names);
+    }
+
+    @Test
+    void theStockSpecKeepsTheSlackFillerAndTheIndexItem() {
+        Copybook parsed = CopybookParser.parse(copybook("STOCK.cpy"), parseOptions())
+            .copybook();
+        SpecNode root = MappingSpecs.draft(parsed, "GET-STOCK", DraftOptions.defaults()).root();
+        assertThat(root.children()).extracting(SpecNode::cobolName).containsExactly(
+            "STOCK-ID", "STOCK-LEVEL", "FILLER", "STOCK-QUANTITY", "STORE-ADDRESS",
+            "STOCK-IDX");
+        assertThat(root.children().get(1).conditions()).hasSize(2);
     }
 
     @Test
