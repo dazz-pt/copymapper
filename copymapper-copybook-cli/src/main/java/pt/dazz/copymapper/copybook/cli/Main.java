@@ -61,7 +61,8 @@ public final class Main {
         --output <file.mapping.json> [--data-charset <name>] [options]
 
         A name that ends with .mapping.json is a mapping spec. The generate command does
-        not accept the options for a copybook input with a model or a mapping spec.
+        not accept the options for a copybook input with a model or a mapping spec. A
+        mapping spec accepts --max-record-length.
 
         Options for a copybook input:
           --format fixed|free        The reference format. Default: fixed.
