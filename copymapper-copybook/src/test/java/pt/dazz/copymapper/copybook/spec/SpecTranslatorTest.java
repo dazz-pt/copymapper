@@ -561,6 +561,26 @@ class SpecTranslatorTest {
     }
 
     @Test
+    void theMapperUsesTheJavaNameOfAnAlternativeOnce() {
+        Map<String, String> values = new LinkedHashMap<>();
+        values.put("1", "R.A");
+        values.put("2", "R.B");
+        var spec = with(draft(AREA), "R.A",
+                e -> e.variant = new VariantSpec.Discriminator("R.KIND", values));
+        spec = with(spec, "R", e -> e.javaName = "Order");
+        spec = with(spec, "R.B", e -> e.javaName = "Bee");
+        spec = with(spec, "R.B.B1", e -> e.javaName = "number");
+        Translation translation = clean(spec);
+        var mapped = ModelMapper.map(translation.copybook(), translation.options(),
+                translation.javaNames());
+        assertThat(mapped.diagnostics()).noneMatch(d -> d.severity() == Severity.ERROR);
+        assertThat(mapped.model().classes()).extracting(c -> c.name())
+                .containsExactly("Order", "A", "Bee");
+        assertThat(mapped.model().classes().get(2).members()).extracting(m -> m.name())
+                .containsExactly("number");
+    }
+
+    @Test
     void aDiscriminatorWithTwoValuesForOneAlternativeIsAnError() {
         Map<String, String> values = new LinkedHashMap<>();
         values.put("1", "R.A");
