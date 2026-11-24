@@ -261,7 +261,11 @@ public final class Main {
         Path path = Path.of(file);
         Path base = path.toAbsolutePath().getParent();
         try {
-            return GeneratorConfigJson.read(Files.readString(path), base);
+            String text = Files.readString(path);
+            // A mapping spec holds the parse and mapping decisions: only package and lombok.
+            return arguments.command.equals("generate") && arguments.specInput()
+                ? GeneratorConfigJson.readSpecOptions(text)
+                : GeneratorConfigJson.read(text, base);
         } catch (ModelJsonException e) {
             throw new UsageException(file + ": " + e.getMessage());
         }

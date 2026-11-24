@@ -377,13 +377,43 @@ class MainTest {
             "--output-dir", fromSpec.toString())).isEqualTo(Main.OK);
         assertThat(run("generate", resource("ORDERS.cpy"), "--package", "com.example.orders",
             "--output-dir", fromCopybook.toString())).isEqualTo(Main.OK);
-        try (var files = Files.walk(fromCopybook)) {
-            for (Path file : files.filter(Files::isRegularFile).toList()) {
-                assertThat(Files.readString(fromSpec.resolve(fromCopybook.relativize(file))))
-                    .isEqualTo(Files.readString(file));
-            }
+        List<Path> copybookFiles = relativeFiles(fromCopybook);
+        assertThat(copybookFiles).hasSize(3);
+        assertThat(relativeFiles(fromSpec)).isEqualTo(copybookFiles);
+        for (Path file : copybookFiles) {
+            assertThat(Files.readString(fromSpec.resolve(file)))
+                .isEqualTo(Files.readString(fromCopybook.resolve(file)));
         }
         assertThat(out()).contains("wrote 3 classes to");
+    }
+
+    /** Gives the sorted paths of the files below a directory, relative to it. */
+    private static List<Path> relativeFiles(Path root) throws IOException {
+        try (var files = Files.walk(root)) {
+            return files.filter(Files::isRegularFile).map(root::relativize).sorted().toList();
+        }
+    }
+
+    @Test
+    void aSpecConfigCanSetThePackageAndLombok() throws IOException {
+        Path spec = draftOf("ORDERS.cpy", "LIST-ORDERS");
+        Path config = dir.resolve("orders.json");
+        Files.writeString(config, "{\"package\": \"com.example.orders\", \"lombok\": true}");
+        assertThat(run("generate", spec.toString(), "--config", config.toString(),
+            "--output-dir", dir.resolve("src").toString())).isEqualTo(Main.OK);
+        assertThat(generated("ListOrders")).content().contains("lombok");
+    }
+
+    @Test
+    void aSpecConfigWithAMappingKeyIsAUsageError() throws IOException {
+        Path spec = draftOf("ORDERS.cpy", "LIST-ORDERS");
+        Path config = dir.resolve("orders.json");
+        Files.writeString(config, "{\"package\": \"com.example.orders\", \"dates\": {}}");
+        assertThat(run("generate", spec.toString(), "--config", config.toString(),
+            "--output-dir", dir.resolve("src").toString())).isEqualTo(Main.USAGE);
+        assertThat(err()).contains("orders.json: the options of a mapping spec permit only the"
+            + " keys package and lombok, not 'dates'");
+        assertThat(dir.resolve("src")).doesNotExist();
     }
 
     @Test

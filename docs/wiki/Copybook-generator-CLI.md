@@ -60,9 +60,9 @@ A `generate` input that ends with `.mapping.json` is a mapping spec. Each other 
 | `--output-dir <dir>` | `generate` | The root directory for the Java files. Mandatory for `generate`. |
 | `--lombok` | `generate` | Write Lombok annotations (`@Data`, `@NoArgsConstructor`) instead of getters and setters. |
 | `--format fixed\|free` | `parse`, `generate`, `draft` | The reference format. Default: `fixed`. See [Source format](Copybook-generator#source-format). |
-| `--charset <name>` | both | The charset of the copybook files. Default: UTF-8. |
-| `--copy-dir <dir>` | both | A directory with `COPY` members. Repeat the option for more directories. |
-| `--record-name <name>` | both | The record name for a copybook without level `01`. Default: the file name. For `draft`: the record to draft. Mandatory for `draft`. |
+| `--charset <name>` | `parse`, `generate`, `draft` | The charset of the copybook files. Default: UTF-8. |
+| `--copy-dir <dir>` | `parse`, `generate`, `draft` | A directory with `COPY` members. Repeat the option for more directories. |
+| `--record-name <name>` | `parse`, `generate`, `draft` | The record name for a copybook without level `01`. Default: the file name. For `draft`: the record to draft. Mandatory for `draft`. |
 | `--strip-prefix <prefix>` | both | A prefix to remove from names, for example `WS-`. Repeat the option for more prefixes. |
 | `--input-marker <word>` | both | A name part that marks an input alternative. Write it in upper case. Repeat the option for more words. |
 | `--output-marker <word>` | both | A name part that marks an output alternative. Write it in upper case. Repeat the option for more words. |
@@ -81,7 +81,7 @@ A `generate` input that ends with `.mapping.json` is a mapping spec. Each other 
 
 With a model input or a mapping spec input, the parse and mapping options (`--format` to `--validatable`, `--empty-item`, `--empty-key`, `--partial-table`, and `--view`) are not permitted. The model or the spec already contains their result.
 With a model input, the generator uses only `package` and `lombok` from the options file. It ignores the other keys.
-With a mapping spec input, the generator uses the options `--package`, `--output-dir`, and `--lombok`. The `--config` option gives only `package` and `lombok`.
+With a mapping spec input, the generator uses the options `--package`, `--output-dir`, and `--lombok`. The options file of `--config` can set only `package` and `lombok`. Another key in that file is an error.
 If you give a single-value option two times, the last value applies.
 
 ### Options file and command line together
