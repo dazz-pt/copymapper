@@ -5,8 +5,8 @@ The directories of the tree give the Java subpackages.
 ## What the plugin does
 
 - It adds the extension `copymapper` and the task `generateCopybookClasses`.
-- The task scans `src/main/copybook` recursively for `.cpy` files.
-- It generates the classes of each copybook into `build/generated/sources/copybook/main`.
+- The task scans `src/main/copybook` recursively for `.cpy` files and for [mapping specs](#mapping-specs) (`.mapping.json` files).
+- It generates the classes of each copybook and each mapping spec into `build/generated/sources/copybook/main`.
 - With the `java` plugin, it adds that directory to the `main` source set. Gradle then runs the task before `compileJava`.
 - The plugin does not add dependencies to your project. Add `copymapper-core` and `copymapper-processor` yourself.
 
@@ -108,7 +108,7 @@ copymapper {
 | `packagePerCopybook` | `false` | Add one package segment from the copybook name. See [Class name collisions](#class-name-collisions). |
 | `maxRecordLength` | none | The maximum record length in bytes. A longer record gives a warning. See [Record length](Copybook-generator#record-length). |
 | `outputDir` | `build/generated/sources/copybook/main` | The directory for the generated Java files. |
-| `include(...)` | `**/*.cpy` | The patterns of the copybook files in `sourceDir`. Your patterns replace the default. Each call adds patterns to the list `includes`. |
+| `include(...)` | `**/*.cpy` | The patterns of the copybook files in `sourceDir`. Your patterns replace the default. Each call adds patterns to the list `includes`. The task also reads the [mapping specs](#mapping-specs). |
 | `exclude(...)` | none | The patterns of the files in `sourceDir` that are not copybooks. Each call adds patterns to the list `excludes`. |
 
 The patterns use the Ant style, and they are relative to `sourceDir`. You can also set the lists directly, for example `includes = listOf("**/*.cpy", "**/*.cob")`.
@@ -174,6 +174,31 @@ The task logs an error line that starts with the path of the options file, for e
 Set the charset of a copybook with `charset` in its options file. The default is UTF-8. The `COPY` members of the copybook use the same charset and the same format.
 Write the options file in UTF-8.
 
+## Mapping specs
+
+A [mapping spec](Dynamic-runtime#the-mapping-spec) is a file `<NAME>.mapping.json`. It holds the decisions of one record, for example the Java names, the dates, and the subtypes.
+Write a draft with the `draft` command of the [CLI](Copybook-generator-CLI#draft-a-mapping-spec-and-generate-from-it). Then edit it and put it in `sourceDir`.
+
+These rules apply:
+
+- A spec `<NAME>.mapping.json` next to a copybook with the same `<NAME>`, for example `<NAME>.cpy`, replaces the copybook and its options file. The plugin does not read that copybook.
+- A spec without a copybook next to it is also an input.
+- The plugin reads each `**/*.mapping.json` file in `sourceDir`, also when you set `include`. The `exclude` patterns apply to the specs.
+- To remove a spec next to a copybook from the inputs, exclude the spec and the copybook. If the plugin selects the copybook, it uses the spec.
+- The spec gets its package from its directory and from `<NAME>`, with the rules of [Packages from directories](#packages-from-directories).
+- An options file `<NAME>.json` next to a spec can set only `package` and `lombok`. Another key is an error, and the build fails.
+- `maxRecordLength` does not apply to a spec.
+
+```
+src/main/copybook/orders/GET-ORDER.cpy            the plugin does not read this file
+src/main/copybook/orders/GET-ORDER.mapping.json   -> package ...orders
+src/main/copybook/orders/GET-ORDER.json           { "package": "com.example.orders" }
+src/main/copybook/billing/GET-INVOICE.mapping.json -> package ...billing
+```
+
+Each message of a spec starts with the path of the spec, relative to `sourceDir`. Then comes the diagnostic with the copybook name and line in the spec. For example: `orders/GET-ORDER.mapping.json: GET-ORDER.cpy:4:12: error: ...`.
+An options file with another key gives this error: `<path>/GET-ORDER.json: the options of a mapping spec permit only the keys package and lombok, not 'dates'`.
+
 ## Class name collisions
 
 The generator writes one Java class for each level `01` record, each `OCCURS` group, and each subtype.
@@ -237,7 +262,7 @@ copymapper {
 ## Up-to-date checks, the build cache, and the configuration cache
 
 - The task is up to date when its inputs do not change. The inputs are:
-  - the copybooks and all `.json` files below `sourceDir`, with their paths relative to `sourceDir`. The `exclude` patterns do not apply to the `.json` files;
+  - the copybooks and all `.json` files below `sourceDir`, with their paths relative to `sourceDir`. The mapping specs are `.json` files. The `exclude` patterns do not apply to the `.json` files;
   - all files in the copy directories, of the extension and of the options files;
   - the order of the copy directories;
   - `include`, `exclude`, `packageName`, `lombok`, `packagePerCopybook`, and `maxRecordLength`.
@@ -315,7 +340,8 @@ The directory [`copymapper-examples-gradle-plugin`](https://github.com/dazz-pt/c
 copymapper-examples-gradle-plugin/
   settings.gradle.kts
   build.gradle.kts
-  src/main/copybook/orders/GET-ORDER.cpy       -> package ...orders: GetOrder, OrderLine
+  src/main/copybook/orders/GET-ORDER.cpy       the source of the mapping spec: the task does not read it
+  src/main/copybook/orders/GET-ORDER.mapping.json -> package ...orders: GetOrder, OrderLine
   src/main/copybook/billing/GET-INVOICE.cpy    -> package ...billing: GetInvoice
   src/main/copybook/billing/GET-INVOICE.json   { "stripPrefixes": ["INV-"], "countFields": {...} }
   src/main/copylib/ADDRESS.cpy                 the COPY member of GET-INVOICE.cpy

@@ -91,7 +91,7 @@
           <type>java.util.List</type>
           <required>false</required>
           <editable>true</editable>
-          <description>The include patterns of the copybook files, relative to the source directory. The default is **/*.cpy.</description>
+          <description>The include patterns of the copybook files, relative to the source directory. The default is **/*.cpy. The goal also reads each **/*.mapping.json file that no exclude pattern selects.</description>
         </parameter>
         <parameter>
           <name>excludes</name>

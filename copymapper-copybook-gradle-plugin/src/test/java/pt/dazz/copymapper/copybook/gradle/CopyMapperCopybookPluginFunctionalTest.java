@@ -356,6 +356,49 @@ class CopyMapperCopybookPluginFunctionalTest {
         assertThat(stale).doesNotExist();
     }
 
+    private static final String SPEC = """
+                    sourceDir = layout.projectDirectory.dir("spec")
+                    packageName = "com.example.mainframe"
+        """;
+
+    @Test
+    void specGeneratesTheClassesAndReplacesTheCopybook() throws IOException {
+        TestCopybooks.copy("spec", dir);
+        javaBuild(SPEC);
+        BuildResult result = build("build");
+        assertThat(result.task(TASK).getOutcome()).isEqualTo(TaskOutcome.SUCCESS);
+        assertThat(result.getOutput()).contains("payments/PAYMENT.mapping.json: PAYMENT.cpy:3:12:"
+            + " warning:");
+        assertThat(dir.resolve("build/classes/java/main/com/example/ordering/Order.class"))
+            .exists();
+        assertThat(dir.resolve(
+            "build/classes/java/main/com/example/mainframe/payments/Payment.class")).exists();
+    }
+
+    @Test
+    void specChangeRunsTaskAgain() throws IOException {
+        TestCopybooks.copy("spec", dir);
+        javaBuild(SPEC);
+        assertThat(generate()).isEqualTo(TaskOutcome.SUCCESS);
+        assertThat(generate()).isEqualTo(TaskOutcome.UP_TO_DATE);
+        Path spec = dir.resolve("spec/orders/ORDER.mapping.json");
+        Files.writeString(spec, Files.readString(spec).replace("\"cobolName\":\"AMOUNT\",",
+            "\"cobolName\":\"AMOUNT\",\"javaName\":\"total\","));
+        assertThat(generate()).isEqualTo(TaskOutcome.SUCCESS);
+        assertThat(dir.resolve(OUT + "com/example/ordering/Order.java")).content()
+            .contains("total");
+    }
+
+    @Test
+    void specOptionsFileWithAMappingKeyFailsTheBuild() throws IOException {
+        TestCopybooks.copy("spec", dir);
+        javaBuild(SPEC);
+        Files.writeString(dir.resolve("spec/payments/PAYMENT.json"), "{\"views\": []}");
+        assertThat(fail("build").getOutput()).contains(dir.resolve("spec/payments/PAYMENT.json")
+            + ": the options of a mapping spec permit only the keys package and lombok, not"
+            + " 'views'");
+    }
+
     @Test
     void withoutJavaPluginApplies() throws IOException {
         tree();

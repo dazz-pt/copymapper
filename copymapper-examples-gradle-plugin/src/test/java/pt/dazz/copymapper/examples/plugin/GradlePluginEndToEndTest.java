@@ -39,7 +39,7 @@ class GradlePluginEndToEndTest {
     void orderFromTheOrdersSubpackage() {
         simulator.register(GetOrder.class, call -> {
             assertThat(call.getOrderId()).isEqualTo("ORD0000042");
-            call.setOrderTotal(new BigDecimal("149.85"));
+            call.setTotalAmount(new BigDecimal("149.85"));
             call.setOrderLine(List.of(line("PRD000000001", 2), line("PRD000000002", 1)));
         });
         GetOrder request = new GetOrder();
@@ -47,7 +47,7 @@ class GradlePluginEndToEndTest {
 
         GetOrder result = client.execute(request);
 
-        assertThat(result.getOrderTotal()).isEqualByComparingTo("149.85");
+        assertThat(result.getTotalAmount()).isEqualByComparingTo("149.85");
         assertThat(result.getOrderLine()).extracting(OrderLine::getProductCode)
             .containsExactly("PRD000000001", "PRD000000002");
     }

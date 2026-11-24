@@ -34,6 +34,7 @@ public final class GeneratorConfigJson {
         "subTypes", "conditions", "countFields", "maxRecordLength", "dates", "continuable",
         "validatable", "emptyItems", "emptyKeys", "partialTables", "views", "package",
         "lombok");
+    private static final Set<String> SPEC_KEYS = Set.of("package", "lombok");
     private static final Set<String> SUBTYPE_KEYS = Set.of("discriminator", "values",
         "classNames");
 
@@ -50,14 +51,7 @@ public final class GeneratorConfigJson {
      * @throws ModelJsonException if the text is not a valid configuration
      */
     public static GeneratorConfig read(String json, Path baseDir) {
-        JsonNode tree;
-        try {
-            tree = MAPPER.readTree(json);
-        } catch (JacksonException e) {
-            throw new ModelJsonException("the text is not valid JSON: "
-                + e.getOriginalMessage());
-        }
-        JsonObject root = JsonObject.of(tree, "$", KEYS);
+        JsonObject root = JsonObject.of(tree(json), "$", KEYS);
         ParseOptions defaults = ParseOptions.defaults();
         ParseOptions parse = new ParseOptions(
             root.has("format") ? root.enumValue("format", SourceFormat.class)
@@ -86,6 +80,37 @@ public final class GeneratorConfigJson {
             root.has("views") ? root.texts("views") : List.of());
         return new GeneratorConfig(parse, mapping, root.optionalText("package"),
             root.has("lombok") ? root.bool("lombok") : null);
+    }
+
+    /**
+     * Reads the options of a mapping spec. A mapping spec holds all decisions of the parse and
+     * map steps, so the options can set only the keys {@code package} and {@code lombok}.
+     * The parse and mapping options of the result are the defaults.
+     *
+     * @param json the JSON text
+     * @return the configuration
+     * @throws ModelJsonException if the text is not valid, or if it has another key
+     */
+    public static GeneratorConfig readSpecOptions(String json) {
+        JsonNode tree = tree(json);
+        if (tree.isObject()) {
+            for (String name : tree.propertyNames()) {
+                if (!SPEC_KEYS.contains(name)) {
+                    throw new ModelJsonException("the options of a mapping spec permit only the"
+                        + " keys package and lombok, not '" + name + "'");
+                }
+            }
+        }
+        return read(json, Path.of(""));
+    }
+
+    private static JsonNode tree(String json) {
+        try {
+            return MAPPER.readTree(json);
+        } catch (JacksonException e) {
+            throw new ModelJsonException("the text is not valid JSON: "
+                + e.getOriginalMessage());
+        }
     }
 
     private static Charset charset(JsonObject root) {

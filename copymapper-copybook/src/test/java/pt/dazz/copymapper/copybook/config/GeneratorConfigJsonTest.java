@@ -180,4 +180,47 @@ class GeneratorConfigJsonTest {
         assertThat(GeneratorConfigJson.read("{\"stripPrefixes\": []}", BASE).mapping()
             .stripPrefixes()).isEqualTo(List.of());
     }
+
+    @Test
+    void specOptionsReadThePackageAndLombok() {
+        GeneratorConfig config = GeneratorConfigJson.readSpecOptions(
+            "{\"package\": \"com.example.ordering\", \"lombok\": true}");
+        assertThat(config.packageName()).isEqualTo("com.example.ordering");
+        assertThat(config.lombok()).isTrue();
+        assertThat(config.parse()).isEqualTo(GeneratorConfigJson.read("{}", BASE).parse());
+        assertThat(config.mapping()).isEqualTo(MappingOptions.defaults());
+    }
+
+    @Test
+    void specOptionsCanBeEmpty() {
+        GeneratorConfig config = GeneratorConfigJson.readSpecOptions("{}");
+        assertThat(config.packageName()).isNull();
+        assertThat(config.lombok()).isNull();
+    }
+
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {
+        "{\"dates\": {}}|the options of a mapping spec permit only the keys package and"
+            + " lombok, not 'dates'",
+        "{\"package\": \"p\", \"copyDirs\": []}|the options of a mapping spec permit"
+            + " only the keys package and lombok, not 'copyDirs'",
+        "{\"colour\": 1}|the options of a mapping spec permit only the keys package and"
+            + " lombok, not 'colour'",
+    })
+    void specOptionsRefuseOtherKeys(String json, String message) {
+        assertThatThrownBy(() -> GeneratorConfigJson.readSpecOptions(json))
+            .isInstanceOf(ModelJsonException.class).hasMessage(message);
+    }
+
+    @Test
+    void specOptionsRefuseInvalidJson() {
+        assertThatThrownBy(() -> GeneratorConfigJson.readSpecOptions("{"))
+            .isInstanceOf(ModelJsonException.class)
+            .hasMessageStartingWith("the text is not valid JSON");
+        assertThatThrownBy(() -> GeneratorConfigJson.readSpecOptions("[]"))
+            .isInstanceOf(ModelJsonException.class)
+            .hasMessage("$ must be an object");
+        assertThatThrownBy(() -> GeneratorConfigJson.readSpecOptions("{\"lombok\": 1}"))
+            .isInstanceOf(ModelJsonException.class);
+    }
 }
