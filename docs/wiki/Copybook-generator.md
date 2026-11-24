@@ -1141,7 +1141,7 @@ The COBOL side of each node gives one data item. The REST side gives the options
 
 The spec has no name markers. A `REDEFINES` area of groups needs a variant, or the generator gives an error.
 
-A spec gives the same classes as its copybook with the same decisions. These options have no equal in a spec:
+A spec gives the same classes as its copybook with the same decisions. These options are not keys of a spec:
 
 | Option | Use in a spec |
 |---|---|
