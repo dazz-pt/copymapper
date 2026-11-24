@@ -79,9 +79,10 @@ A `generate` input that ends with `.mapping.json` is a mapping spec. Each other 
 | `--validatable <record>=<class>` | `parse`, `generate` | The handler class of a `Validatable` record. |
 | `--config <file.json>` | `parse`, `generate` | An [options file](Copybook-generator#options-file) with all options. |
 
-With a model input or a mapping spec input, the parse and mapping options (`--format` to `--validatable`, `--empty-item`, `--empty-key`, `--partial-table`, and `--view`) are not permitted. The model or the spec already contains their result.
+With a model input, the parse and mapping options (`--format` to `--validatable`, `--empty-item`, `--empty-key`, `--partial-table`, and `--view`) are not permitted. The model already contains their result.
+With a mapping spec input, the same options are not permitted, except `--max-record-length`. The spec contains the other decisions.
 With a model input, the generator uses only `package` and `lombok` from the options file. It ignores the other keys.
-With a mapping spec input, the generator uses the options `--package`, `--output-dir`, and `--lombok`. The options file of `--config` can set only `package` and `lombok`. Another key in that file is an error.
+With a mapping spec input, the generator uses the options `--package`, `--output-dir`, `--lombok`, and `--max-record-length`. The options file of `--config` can set only `package` and `lombok`. Another key in that file is an error.
 If you give a single-value option two times, the last value applies.
 
 ### Options file and command line together

@@ -395,6 +395,17 @@ class MainTest {
     }
 
     @Test
+    void maxRecordLengthAppliesToASpec() {
+        Path spec = draftOf("ORDERS.cpy", "LIST-ORDERS");
+        assertThat(run("generate", spec.toString(), "--max-record-length", "500",
+            "--package", "com.example.orders", "--output-dir", dir.resolve("src").toString()))
+            .isEqualTo(Main.OK);
+        assertThat(err()).contains("ORDERS.cpy:4:8: warning: record LIST-ORDERS has at most"
+            + " 552 bytes, more than the maximum record length of 500 bytes.");
+        assertThat(generated("ListOrders")).exists();
+    }
+
+    @Test
     void aSpecConfigCanSetThePackageAndLombok() throws IOException {
         Path spec = draftOf("ORDERS.cpy", "LIST-ORDERS");
         Path config = dir.resolve("orders.json");
@@ -524,6 +535,8 @@ class MainTest {
             + " needs a number of bytes of 1 or more, not '0'",
         "parse A.cpy --output a.json --max-record-length 32K|--max-record-length needs a"
             + " number of bytes of 1 or more, not '32K'",
+        "generate A.mapping.json --package a --output-dir x --max-record-length 0"
+            + "|--max-record-length needs a number of bytes of 1 or more, not '0'",
         "generate A.json --package a --output-dir x --max-record-length 100|parse and mapping"
             + " options are not permitted with a model input",
         "generate A.cpy --package a --output-dir x --date A|--date needs NAME=PATTERN, not 'A'",

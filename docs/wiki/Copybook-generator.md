@@ -1119,7 +1119,7 @@ To generate the classes, give the spec to a tool:
 
 | Tool | Input |
 |---|---|
-| CLI | `generate <file.mapping.json>`. The parse options and the mapping options are not permitted. `--package`, `--output-dir`, and `--lombok` apply. |
+| CLI | `generate <file.mapping.json>`. The parse options and the mapping options are not permitted, except `--max-record-length`. `--package`, `--output-dir`, `--lombok`, and `--max-record-length` apply. |
 | Gradle plugin | A file `<NAME>.mapping.json` in `sourceDir`. See [Mapping specs](Copybook-generator-Gradle-plugin#mapping-specs). |
 | Maven plugin | A file `<NAME>.mapping.json` in `sourceDir`. See [Mapping specs](Copybook-generator-Maven-plugin#mapping-specs). |
 | Java API | `Copybooks.generate(MappingSpec spec, GenerateOptions generate)`. |

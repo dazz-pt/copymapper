@@ -172,16 +172,17 @@ public final class Main {
             arguments.lombok || Boolean.TRUE.equals(config.lombok()));
         Copybooks.Result result;
         if (arguments.specInput()) {
-            refuseMappingOptions(arguments, "a mapping spec input");
+            refuseMappingOptions(arguments, "a mapping spec input", "--max-record-length");
+            Integer maxRecordLength = maxRecordLength(arguments, config.mapping());
             try {
                 result = Copybooks.generate(MappingSpecJson.read(
-                    Files.readString(arguments.input)), options);
+                    Files.readString(arguments.input)), maxRecordLength, options);
             } catch (MappingSpecFormatException e) {
                 err.println(arguments.input.getFileName() + ": error: " + e.getMessage());
                 return FAILED;
             }
         } else if (arguments.modelInput()) {
-            refuseMappingOptions(arguments, "a model input");
+            refuseMappingOptions(arguments, "a model input", null);
             try {
                 result = Copybooks.generate(ModelJson.read(Files.readString(arguments.input)),
                     options);
@@ -201,9 +202,11 @@ public final class Main {
         return OK;
     }
 
-    private static void refuseMappingOptions(Arguments arguments, String input) {
+    /** Refuses the parse and mapping options, except the permitted one. */
+    private static void refuseMappingOptions(Arguments arguments, String input,
+        String permitted) {
         for (String option : Arguments.MODEL_OPTIONS) {
-            if (!arguments.all(option).isEmpty()) {
+            if (!option.equals(permitted) && !arguments.all(option).isEmpty()) {
                 throw new UsageException("parse and mapping options are not permitted with "
                     + input);
             }
