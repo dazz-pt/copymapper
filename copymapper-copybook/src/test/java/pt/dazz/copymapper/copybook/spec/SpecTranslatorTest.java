@@ -57,6 +57,8 @@ class SpecTranslatorTest {
         String javaName;
         FieldDirection direction;
         String jsonName;
+        String counter;
+        List<ConditionSpec> conditions;
         private final SpecNode node;
 
         Edit(SpecNode node) {
@@ -76,13 +78,15 @@ class SpecTranslatorTest {
             javaName = node.javaName();
             direction = node.direction();
             jsonName = node.jsonName();
+            counter = node.counter();
+            conditions = node.conditions();
         }
 
         SpecNode build(List<SpecNode> children) {
             return new SpecNode(cobolName, node.level(), node.path(), picture, usage, sign,
-                    occurs, redefines, node.value(), node.conditions(), location,
+                    occurs, redefines, node.value(), conditions, location,
                     node.declaration(), blankWhenZero, node.edited(), jsonName, direction,
-                    jsonType, format, table, node.counter(), variant, javaName, children);
+                    jsonType, format, table, counter, variant, javaName, children);
         }
     }
 
@@ -156,7 +160,9 @@ class SpecTranslatorTest {
                 "   05 PARTY-ALT REDEFINES PARTY.",
                 "      10 ALT-NAME PIC X(10).",
                 "   05 COUNTER PIC 9(4) COMP-5.");
-        MappingSpec spec = MappingSpecs.draft(parsed, "ORDER-REC", DraftOptions.defaults());
+        MappingSpec spec = with(MappingSpecs.draft(parsed, "ORDER-REC", DraftOptions.defaults()),
+                "ORDER-REC.PARTY", e -> e.variant = new VariantSpec.FixedSelection(
+                        "ORDER-REC.PARTY", "ORDER-REC.PARTY-ALT"));
 
         Translation translation = clean(spec);
 
@@ -204,17 +210,50 @@ class SpecTranslatorTest {
     }
 
     @Test
-    void keepsATrailingSignOutsideTheDisplayDefault() {
+    void aSignWhereNoSignAppliesIsAnError() {
         var spec = draft("01 R.", "   05 A PIC S9(3).", "   05 B PIC S9(3) COMP-3.",
-                "   05 C PIC 9(3).", "   05 D PIC -99.");
+                "   05 C PIC 9(3).", "   05 D PIC -99.", "   05 G.", "      10 X PIC X.",
+                "   05 L PIC S9(3) SIGN LEADING.");
         spec = with(spec, "R.B", e -> e.sign = Sign.TRAILING);
-        spec = with(spec, "R.C", e -> e.sign = Sign.TRAILING);
+        spec = with(spec, "R.C", e -> e.sign = Sign.LEADING);
         spec = with(spec, "R.D", e -> e.sign = Sign.TRAILING);
-        Copybook copybook = clean(spec).copybook();
+        spec = with(spec, "R.G", e -> e.sign = Sign.TRAILING);
+        Translation translation = SpecTranslator.translate(spec);
+        String needs = " needs a signed DISPLAY picture without edit symbols";
+        assertThat(errors(translation)).containsExactly(
+                "ORDER.cpy:3:4: error: R.B: the sign TRAILING" + needs,
+                "ORDER.cpy:4:4: error: R.C: the sign LEADING" + needs,
+                "ORDER.cpy:5:4: error: R.D: the sign TRAILING" + needs,
+                "ORDER.cpy:6:4: error: R.G: the sign TRAILING" + needs);
+        Copybook copybook = translation.copybook();
         assertThat(item(copybook, "R.A").sign()).isNull();
+        assertThat(item(copybook, "R.L").sign()).isEqualTo(Sign.LEADING);
         assertThat(item(copybook, "R.B").sign()).isEqualTo(Sign.TRAILING);
-        assertThat(item(copybook, "R.C").sign()).isEqualTo(Sign.TRAILING);
-        assertThat(item(copybook, "R.D").sign()).isEqualTo(Sign.TRAILING);
+    }
+
+    @Test
+    void anElementaryItemWithoutAPictureIsAnError() {
+        var spec = with(draft("01 R.", "   05 A PIC X."), "R.A", e -> e.picture = null);
+        assertThat(errors(SpecTranslator.translate(spec))).containsExactly(
+                "ORDER.cpy:2:4: error: R.A: an elementary item needs a picture");
+    }
+
+    @Test
+    void aGroupWithAPictureIsAnError() {
+        var spec = with(draft("01 R.", "   05 G.", "      10 A PIC X."), "R.G",
+                e -> e.picture = "X(1)");
+        Translation translation = SpecTranslator.translate(spec);
+        assertThat(errors(translation)).containsExactly(
+                "ORDER.cpy:2:4: error: R.G: a group must not have a picture");
+        assertThat(item(translation.copybook(), "R.G").picture()).isNull();
+    }
+
+    @Test
+    void upperCasesTheConditionNames() {
+        var spec = with(draft("01 R.", "   05 S PIC X.", "      88 OK VALUE 'Y'."), "R.S",
+                e -> e.conditions = List.of(new ConditionSpec("ok", e.conditions.get(0).values())));
+        assertThat(item(clean(spec).copybook(), "R.S").conditions().get(0).name())
+                .isEqualTo("OK");
     }
 
     @Test
@@ -275,7 +314,10 @@ class SpecTranslatorTest {
     @Test
     void aDependingOnTextOutsideTheSpecStaysAsWritten() {
         var spec = with(draft("01 R.", "   05 N PIC 9.", "   05 T OCCURS 1 TO 3 DEPENDING ON N.",
-                "      10 X PIC X."), "R.T", e -> e.occurs = new OccursSpec(1, 3, "m of other"));
+                "      10 X PIC X."), "R.T", e -> {
+                    e.occurs = new OccursSpec(1, 3, "m of other");
+                    e.counter = "m of other";
+                });
         DataItem t = item(clean(spec).copybook(), "R.T");
         assertThat(t.occurs().dependingOn()).isEqualTo(QualifiedName.parse("M OF OTHER"));
     }
@@ -283,7 +325,10 @@ class SpecTranslatorTest {
     @Test
     void anInvalidDependingOnTextIsAnError() {
         var spec = with(draft("01 R.", "   05 N PIC 9.", "   05 T OCCURS 1 TO 3 DEPENDING ON N.",
-                "      10 X PIC X."), "R.T", e -> e.occurs = new OccursSpec(1, 3, " "));
+                "      10 X PIC X."), "R.T", e -> {
+                    e.occurs = new OccursSpec(1, 3, " ");
+                    e.counter = null;
+                });
         Translation translation = SpecTranslator.translate(spec);
         assertThat(errors(translation)).singleElement().asString()
                 .startsWith("ORDER.cpy:3:4: error: R.T: the DEPENDING ON item ' '");
@@ -295,7 +340,10 @@ class SpecTranslatorTest {
     void aDependingOnItemWithoutAUniqueNameIsAnError() {
         var spec = with(draft("01 R.", "   05 N PIC 9.", "   05 N PIC 9.",
                 "   05 T OCCURS 1 TO 3 DEPENDING ON N OF R.", "      10 X PIC X."), "R.T",
-                e -> e.occurs = new OccursSpec(1, 3, "R.N#2"));
+                e -> {
+                    e.occurs = new OccursSpec(1, 3, "R.N#2");
+                    e.counter = "R.N#2";
+                });
         Translation translation = SpecTranslator.translate(spec);
         assertThat(errors(translation)).singleElement().asString()
                 .isEqualTo("ORDER.cpy:4:4: error: R.T: no COBOL name designates only the item"
@@ -310,9 +358,46 @@ class SpecTranslatorTest {
                 "      10 B REDEFINES A PIC 99.");
         assertThat(item(clean(spec).copybook(), "R.G.B").redefines())
                 .isEqualTo(QualifiedName.parse("A"));
-        var other = with(spec, "R.G.B", e -> e.redefines = "a#2");
-        assertThat(item(clean(other).copybook(), "R.G.B").redefines())
+        var text = with(spec, "R.G.B", e -> e.redefines = "a");
+        assertThat(item(clean(text).copybook(), "R.G.B").redefines())
                 .isEqualTo(QualifiedName.parse("A"));
+    }
+
+    @Test
+    void aRedefinesPathThatIsNotAnEarlierSiblingIsAnError() {
+        var spec = draft("01 R.", "   05 Z PIC X(2).", "   05 G.", "      10 A PIC X(2).",
+                "      10 A PIC X(2).", "      10 B REDEFINES A PIC 99.", "      10 C PIC X(2).");
+        var number = with(spec, "R.G.B", e -> e.redefines = "R.G.A#2");
+        Translation one = SpecTranslator.translate(number);
+        assertThat(errors(one)).containsExactly("ORDER.cpy:6:7: error: R.G.B: the REDEFINES"
+                + " item R.G.A#2 is a duplicate sibling name. COBOL cannot name it.");
+        assertThat(item(one.copybook(), "R.G.B").redefines()).isEqualTo(QualifiedName.parse("A"));
+        var later = with(spec, "R.G.B", e -> e.redefines = "R.G.C");
+        assertThat(errors(SpecTranslator.translate(later))).containsExactly("ORDER.cpy:6:7:"
+                + " error: R.G.B: the REDEFINES item R.G.C is not an earlier sibling");
+        var outside = with(spec, "R.G.B", e -> e.redefines = "R.Z");
+        assertThat(errors(SpecTranslator.translate(outside))).containsExactly("ORDER.cpy:6:7:"
+                + " error: R.G.B: the REDEFINES item R.Z is not an earlier sibling");
+    }
+
+    @Test
+    void aCounterThatIsNotTheDependingOnItemIsAnError() {
+        var spec = draft("01 R.", "   05 N PIC 9.", "   05 M PIC 9.",
+                "   05 T OCCURS 1 TO 3 DEPENDING ON N.", "      10 X PIC X.",
+                "   05 F OCCURS 3.", "      10 Y PIC X.");
+        assertThat(item(clean(spec).copybook(), "R.T").occurs().dependingOn())
+                .isEqualTo(QualifiedName.parse("N"));
+        spec = with(spec, "R.T", e -> e.counter = "R.M");
+        spec = with(spec, "R.F", e -> e.counter = "R.M");
+        assertThat(errors(SpecTranslator.translate(spec))).containsExactly(
+                "ORDER.cpy:4:4: error: R.T: the counter R.M is not the DEPENDING ON item R.N."
+                        + " The generator uses the DEPENDING ON item as the counter.",
+                "ORDER.cpy:6:4: error: R.F: the counter R.M needs OCCURS DEPENDING ON. The"
+                        + " generator uses the DEPENDING ON item as the counter.");
+        var plain = with(draft("01 R.", "   05 N PIC 9."), "R.N", e -> e.counter = "R.N");
+        assertThat(errors(SpecTranslator.translate(plain))).containsExactly(
+                "ORDER.cpy:2:4: error: R.N: the counter R.N needs OCCURS DEPENDING ON. The"
+                        + " generator uses the DEPENDING ON item as the counter.");
     }
 
     // ---- the REST side ----
@@ -353,10 +438,84 @@ class SpecTranslatorTest {
             e.jsonType = JsonType.DATE_TIME;
             e.format = "yyyyMMddHHmmss";
         });
-        spec = with(spec, "R.F", e -> e.format = "#,##0");
-        spec = with(spec, "R.N", e -> e.jsonType = JsonType.DATE);
         assertThat(clean(spec).options().dates()).containsExactly(Map.entry("D", "yyyyMMdd"),
                 Map.entry("T", "HHmmss"), Map.entry("S", "yyyyMMddHHmmss"));
+    }
+
+    @Test
+    void aFormatWithoutADateTypeIsAnError() {
+        var spec = draft("01 R.", "   05 F PIC 9(8).", "   05 G PIC 9(8).");
+        spec = with(spec, "R.F", e -> e.format = "#,##0");
+        spec = with(spec, "R.G", e -> {
+            e.format = "yyyyMMdd";
+            e.jsonType = JsonType.DECIMAL_STRING;
+        });
+        Translation translation = SpecTranslator.translate(spec);
+        String text = ": a format needs the JSON type DATE, TIME, or DATE_TIME. The generator"
+                + " uses a format only for a date or a time.";
+        assertThat(errors(translation)).containsExactly("ORDER.cpy:2:4: error: R.F" + text,
+                "ORDER.cpy:3:4: error: R.G" + text);
+        assertThat(translation.options().dates()).isEmpty();
+    }
+
+    @Test
+    void aDateTypeWithoutAFormatIsAnError() {
+        var spec = draft("01 R.", "   05 D PIC 9(8).", "   05 T PIC 9(6).", "   05 S PIC 9(14).");
+        spec = with(spec, "R.D", e -> e.jsonType = JsonType.DATE);
+        spec = with(spec, "R.T", e -> e.jsonType = JsonType.TIME);
+        spec = with(spec, "R.S", e -> e.jsonType = JsonType.DATE_TIME);
+        assertThat(errors(SpecTranslator.translate(spec))).containsExactly(
+                "ORDER.cpy:2:4: error: R.D: the JSON type DATE needs a format",
+                "ORDER.cpy:3:4: error: R.T: the JSON type TIME needs a format",
+                "ORDER.cpy:4:4: error: R.S: the JSON type DATE_TIME needs a format");
+    }
+
+    @Test
+    void aFormatOfAnotherKindIsAnError() {
+        var spec = draft("01 R.", "   05 D PIC 9(6).", "   05 T PIC 9(8).", "   05 S PIC 9(8).",
+                "   05 X PIC 9(8).");
+        spec = with(spec, "R.D", e -> {
+            e.jsonType = JsonType.DATE;
+            e.format = "HHmmss";
+        });
+        spec = with(spec, "R.T", e -> {
+            e.jsonType = JsonType.TIME;
+            e.format = "yyyyMMdd";
+        });
+        spec = with(spec, "R.S", e -> {
+            e.jsonType = JsonType.DATE_TIME;
+            e.format = "yyyyMMdd";
+        });
+        spec = with(spec, "R.X", e -> {
+            e.jsonType = JsonType.DATE;
+            e.format = "yyyyMMddHHmmss";
+        });
+        Translation translation = SpecTranslator.translate(spec);
+        assertThat(errors(translation)).containsExactly(
+                "ORDER.cpy:2:4: error: R.D: the format HHmmss is a TIME pattern, but the JSON"
+                        + " type is DATE",
+                "ORDER.cpy:3:4: error: R.T: the format yyyyMMdd is a DATE pattern, but the JSON"
+                        + " type is TIME",
+                "ORDER.cpy:4:4: error: R.S: the format yyyyMMdd is a DATE pattern, but the JSON"
+                        + " type is DATE_TIME",
+                "ORDER.cpy:5:4: error: R.X: the format yyyyMMddHHmmss is a DATE_TIME pattern,"
+                        + " but the JSON type is DATE");
+        assertThat(translation.options().dates()).isEmpty();
+    }
+
+    @Test
+    void leavesAPatternThatFitsNoTypeToTheGenerator() {
+        var spec = draft("01 R.", "   05 D PIC 9(8).", "   05 E PIC 9(2).");
+        spec = with(spec, "R.D", e -> {
+            e.jsonType = JsonType.DATE;
+            e.format = "yyyy{";
+        });
+        spec = with(spec, "R.E", e -> {
+            e.jsonType = JsonType.DATE;
+            e.format = "ss";
+        });
+        assertThat(clean(spec).options().dates()).containsExactly(Map.entry("D", "yyyy{"),
+                Map.entry("E", "ss"));
     }
 
     @Test
@@ -491,9 +650,11 @@ class SpecTranslatorTest {
             e.sign = Sign.TRAILING;
         });
         spec = with(spec, "R.H.M", e -> e.usage = null);
-        Copybook copybook = clean(spec).copybook();
+        Translation translation = SpecTranslator.translate(spec);
+        assertThat(errors(translation)).containsExactly("ORDER.cpy:3:7: error: R.G.N: the sign"
+                + " TRAILING needs a signed DISPLAY picture without edit symbols");
+        Copybook copybook = translation.copybook();
         assertThat(item(copybook, "R.G.N").usage()).isNull();
-        assertThat(item(copybook, "R.G.N").sign()).isEqualTo(Sign.TRAILING);
         assertThat(item(copybook, "R.H.M").sign()).isNull();
     }
 
@@ -555,6 +716,98 @@ class SpecTranslatorTest {
         var response = with(draft(FILLER_AREA), "R.A", e -> e.variant =
                 new VariantSpec.FixedSelection("R.A", "R.FILLER#2"));
         assertThat(SpecTranslator.translate(response).options().directions()).isEmpty();
+    }
+
+    @Test
+    void aVariantOnAnAlternativeDecidesTheArea() {
+        var spec = with(draft(AREA), "R.B",
+                e -> e.variant = new VariantSpec.FixedSelection("R.A", "R.B"));
+        assertThat(clean(spec).options().directions()).containsOnly(
+                Map.entry("A", Direction.INPUT), Map.entry("B", Direction.OUTPUT));
+    }
+
+    @Test
+    void aVariantOutsideAnAreaIsAnError() {
+        var single = with(draft(AREA), "R.KIND",
+                e -> e.variant = new VariantSpec.FixedSelection("R.A", "R.B"));
+        assertThat(errors(SpecTranslator.translate(single))).containsExactly(
+                "ORDER.cpy:2:4: error: R.KIND: the variant is not on a REDEFINES area",
+                "ORDER.cpy:3:4: error: R.A: the REDEFINES area has no variant. Set a"
+                        + " discriminator or a fixed selection.");
+        var text = with(draft(AREA), "R.B", e -> {
+            e.redefines = "A";
+            e.variant = new VariantSpec.FixedSelection("R.A", "R.B");
+        });
+        assertThat(errors(SpecTranslator.translate(text))).containsExactly(
+                "ORDER.cpy:5:4: error: R.B: the variant is not on a REDEFINES area");
+    }
+
+    @Test
+    void aSecondVariantOnOneAreaIsAnError() {
+        var spec = with(draft(AREA), "R.A",
+                e -> e.variant = new VariantSpec.Discriminator("R.KIND", Map.of("1", "R.A")));
+        spec = with(spec, "R.B", e -> e.variant = new VariantSpec.FixedSelection("R.A", "R.B"));
+        Translation translation = SpecTranslator.translate(spec);
+        assertThat(errors(translation)).containsExactly("ORDER.cpy:5:4: error: R.B: the"
+                + " REDEFINES area of R.A already has a variant on R.A. Set one variant for"
+                + " each area.");
+        assertThat(translation.options().directions()).isEmpty();
+    }
+
+    @Test
+    void anAlternativeOutsideTheAreaIsAnError() {
+        var spec = with(draft(AREA), "R.A", e -> e.variant =
+                new VariantSpec.Discriminator("R.KIND", Map.of("1", "R.A", "2", "R.KIND")));
+        Translation one = SpecTranslator.translate(spec);
+        assertThat(errors(one)).containsExactly("ORDER.cpy:3:4: error: R.A: the alternative"
+                + " R.KIND is not in the REDEFINES area of R.A");
+        assertThat(one.options().subTypes()).isEmpty();
+        var fixed = with(draft(AREA), "R.A",
+                e -> e.variant = new VariantSpec.FixedSelection("R.KIND", "R.B"));
+        Translation two = SpecTranslator.translate(fixed);
+        assertThat(errors(two)).containsExactly("ORDER.cpy:3:4: error: R.A: the alternative"
+                + " R.KIND is not in the REDEFINES area of R.A");
+        assertThat(two.options().directions()).isEmpty();
+    }
+
+    @Test
+    void aFixedSelectionInAnAreaOfThreeIsAnError() {
+        var spec = draft("01 R.", "   05 A.", "      10 A1 PIC X.", "   05 B REDEFINES A.",
+                "      10 B1 PIC X.", "   05 C REDEFINES A.", "      10 C1 PIC X.");
+        spec = with(spec, "R.A", e -> e.variant = new VariantSpec.FixedSelection("R.A", "R.B"));
+        Translation translation = SpecTranslator.translate(spec);
+        assertThat(errors(translation)).containsExactly("ORDER.cpy:2:4: error: R.A: the"
+                + " REDEFINES area has 3 alternatives. A fixed selection needs an area of two"
+                + " alternatives. Set a discriminator.");
+        assertThat(translation.options().directions()).isEmpty();
+    }
+
+    @Test
+    void anAreaWithoutAVariantIsAnError() {
+        var spec = draft("01 R.", "   05 A.", "      10 A1 PIC X.", "   05 B REDEFINES A.",
+                "      10 B1 PIC X.", "   05 E PIC X(2).", "   05 F REDEFINES E PIC 99.");
+        assertThat(errors(SpecTranslator.translate(spec))).containsExactly("ORDER.cpy:2:4:"
+                + " error: R.A: the REDEFINES area has no variant. Set a discriminator or a"
+                + " fixed selection.");
+    }
+
+    @Test
+    void anAreaInsideAnAlternativeNeedsNoVariant() {
+        var spec = draft("01 R.", "   05 A.", "      10 X.", "         15 X1 PIC X.",
+                "      10 Y REDEFINES X.", "         15 Y1 PIC X.", "   05 B REDEFINES A.",
+                "      10 Z.", "         15 Z1 PIC X.", "      10 W REDEFINES Z.",
+                "         15 W1 PIC X.");
+        spec = with(spec, "R.A", e -> e.variant = new VariantSpec.FixedSelection("R.A", "R.B"));
+        assertThat(clean(spec).options().directions()).hasSize(2);
+    }
+
+    @Test
+    void ignoresADirectionInsideAnArea() {
+        var spec = with(draft(AREA), "R.A",
+                e -> e.variant = new VariantSpec.FixedSelection("R.A", "R.B"));
+        var directed = with(with(spec, "R.A.A1", e -> e.direction = FieldDirection.OUTPUT),
+                "R.B", e -> e.direction = FieldDirection.INPUT);
+        assertThat(clean(directed).options()).isEqualTo(clean(spec).options());
     }
 
     @Test
@@ -668,7 +921,8 @@ class SpecTranslatorTest {
                 "ORDER.cpy:2:4: error: R.FILLER: the Java name group is on a FILLER. The"
                         + " generator gives no Java name to a FILLER.",
                 "ORDER.cpy:3:7: error: R.FILLER.A: the Java name inner is in a FILLER group."
-                        + " The generator gives no Java name to an item in a FILLER group.",
+                        + " The generator puts the items of a FILLER group in the enclosing"
+                        + " class, and a FILLER has no stable path for a decision.",
                 "ORDER.cpy:4:4: error: R.FILLER#2: the Java name pad is on a FILLER. The"
                         + " generator gives no Java name to a FILLER.");
         assertThat(translation.javaNames()).isEmpty();
