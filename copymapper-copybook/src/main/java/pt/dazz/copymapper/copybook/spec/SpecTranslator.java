@@ -460,7 +460,10 @@ public final class SpecTranslator {
 
         // ---- variants ----
 
-        /** Finds the area of a variant, and checks that the area has one variant only. */
+        /**
+         * Finds the area of a variant, and checks that the area has one variant only. The
+         * generator decides only an area of groups that is not inside another area.
+         */
         private void variant(SpecNode node, VariantSpec variant) {
             if (unresolved.contains(node)) {
                 // The REDEFINES text has an error.
@@ -470,6 +473,20 @@ public final class SpecTranslator {
             List<SpecNode> area = base == null ? null : areas.get(base);
             if (area == null) {
                 error(node, "the variant is not on a REDEFINES area");
+                return;
+            }
+            SpecNode elementary = area.stream().filter(a -> !a.isGroup()).findFirst()
+                    .orElse(null);
+            if (elementary != null) {
+                error(node, "the alternative " + elementary.path() + " of the REDEFINES area of "
+                        + base.path() + " is not a group. The generator decides only an area"
+                        + " of groups.");
+                return;
+            }
+            if (nested(base)) {
+                error(node, "the REDEFINES area of " + base.path() + " is inside an alternative"
+                        + " of another area. The generator keeps all alternatives of an inner"
+                        + " area.");
                 return;
             }
             SpecNode first = variants.putIfAbsent(base, node);

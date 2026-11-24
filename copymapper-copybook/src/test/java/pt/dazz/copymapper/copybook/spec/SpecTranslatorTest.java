@@ -943,6 +943,40 @@ class SpecTranslatorTest {
     }
 
     @Test
+    void aVariantOnAnAreaWithAnElementaryAlternativeIsAnError() {
+        String groups = " is not a group. The generator decides only an area of groups.";
+        var elementary = with(draft("01 R.", "   05 KIND PIC X.", "   05 E PIC X(2).",
+                "   05 F REDEFINES E PIC 99."), "R.E",
+                e -> e.variant = new VariantSpec.FixedSelection("R.E", "R.F"));
+        Translation one = SpecTranslator.translate(elementary);
+        assertThat(errors(one)).containsExactly("ORDER.cpy:3:4: error: R.E: the alternative R.E"
+                + " of the REDEFINES area of R.E" + groups);
+        assertThat(one.options().directions()).isEmpty();
+        var mixed = with(draft("01 R.", "   05 KIND PIC X.", "   05 A.", "      10 A1 PIC X(4).",
+                "   05 B REDEFINES A PIC 9(4)."), "R.A", e -> e.variant =
+                new VariantSpec.Discriminator("R.KIND", Map.of("1", "R.A", "2", "R.B")));
+        Translation two = SpecTranslator.translate(mixed);
+        assertThat(errors(two)).containsExactly("ORDER.cpy:3:4: error: R.A: the alternative R.B"
+                + " of the REDEFINES area of R.A" + groups);
+        assertThat(two.options().subTypes()).isEmpty();
+    }
+
+    @Test
+    void aVariantOnAnAreaInsideAnAlternativeIsAnError() {
+        var spec = draft("01 R.", "   05 A.", "      10 X.", "         15 X1 PIC X.",
+                "      10 Y REDEFINES X.", "         15 Y1 PIC X.", "   05 B REDEFINES A.",
+                "      10 Z PIC X.");
+        spec = with(spec, "R.A", e -> e.variant = new VariantSpec.FixedSelection("R.A", "R.B"));
+        spec = with(spec, "R.A.Y",
+                e -> e.variant = new VariantSpec.FixedSelection("R.A.X", "R.A.Y"));
+        Translation translation = SpecTranslator.translate(spec);
+        assertThat(errors(translation)).containsExactly("ORDER.cpy:5:7: error: R.A.Y: the"
+                + " REDEFINES area of R.A.X is inside an alternative of another area. The"
+                + " generator keeps all alternatives of an inner area.");
+        assertThat(translation.options().directions()).containsOnlyKeys("A", "B");
+    }
+
+    @Test
     void anAreaInsideAnAlternativeNeedsNoVariant() {
         var spec = draft("01 R.", "   05 A.", "      10 X.", "         15 X1 PIC X.",
                 "      10 Y REDEFINES X.", "         15 Y1 PIC X.", "   05 B REDEFINES A.",
