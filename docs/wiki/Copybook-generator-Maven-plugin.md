@@ -193,6 +193,7 @@ Write a draft with the `draft` command of the [CLI](Copybook-generator-CLI#draft
 These rules apply:
 
 - A spec `<NAME>.mapping.json` next to a copybook with the same `<NAME>`, for example `<NAME>.cpy`, replaces the copybook and its options file. The goal does not read that copybook.
+- A spec holds one record. A spec next to a copybook with more records replaces all the records of that copybook. The goal generates only the record of the spec.
 - A spec without a copybook next to it is also an input.
 - The goal reads each `**/*.mapping.json` file in `sourceDir`, also when you set `includes`. The `excludes` patterns apply to the specs.
 - To remove a spec next to a copybook from the inputs, exclude the spec and the copybook. If the goal selects the copybook, it uses the spec.

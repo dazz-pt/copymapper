@@ -376,16 +376,20 @@ The generated codec does not pad a subtype at the operation level, and it does n
   | Mapping spec | Generator |
   |---|---|
   | `format` of a date | `dates` |
+  | A `jsonType` that is not a date (`TEXT`, `NUMBER`, `DECIMAL_STRING`) | Not used. The `PICTURE` gives the Java type. |
   | `table: COUNT` | `countFields` |
   | `table: SPACES` or `KEY` | the empty-item markers |
+  | `table: LOW_VALUES` | Nothing. It is the default of the generator. |
+  | `counter` | Not used. It must be the `DEPENDING ON` item, else it is an error. |
   | A discriminator | `subTypes` |
   | A fixed selection with two alternatives | `directions` (a direction split) |
+  | A direction inside a `REDEFINES` area | Not used. The variant of the area decides. |
   | A direction outside a `REDEFINES` area | `INPUT_OUTPUT` in Java. In Java, all items occupy their bytes, so the JSON direction does not apply. |
-  | `jsonName` | Not used. The Java names keep the rules of the generator. |
+  | `jsonName` | Not used by the generator. The Java names keep the rules of the generator. |
 
-- A node can have an optional `javaName`: the class name of the record, a group, a table, or an alternative, or the field name of an item. Without it, the generator rules apply. `javaName` is not in the canonical form when it is `null`, so the hash of a spec without Java names does not change.
+- A node can have an optional `javaName`: the class name of the record, of an item with `OCCURS` (the class of its entries), or of an alternative of a discriminator area (a subtype), or the field name of an elementary item. A `javaName` on an item that gets no class and no field, for example a group without `OCCURS`, is an error. Without it, the generator rules apply. `javaName` is not in the canonical form when it is `null`, so the hash of a spec without Java names does not change.
 - A mapping spec with an item that the generator cannot express gives an error diagnostic with the path and the source line. Example: an item that the runtime supports and the generator does not.
-- #148 translates every REST decision of the table above, for all types that the generator supports. The owner decided this on 2026-11-24. Thus, the later issues (#138, #140, #141, #142) do not change the translation.
+- #148 translates every REST decision of the table above that the generator can use, for all types that the generator supports. The other decisions are not used, or they are errors. The owner decided this on 2026-11-24. Thus, the later issues (#138, #140, #141, #142) do not change the translation.
 
 ### 5.13 The CTG timeout for one call (#143)
 
@@ -427,7 +431,7 @@ The generated codec does not pad a subtype at the operation level, and it does n
 
 Each issue after #139 adds its rules to the mapping spec, the compiler, and the codec, and adds its fixtures to the test kit.
 
-#148 translates every REST decision (the owner decided this on 2026-11-24). Thus, #138, #140, #141, and #142 change only the runtime and the fixtures, not the generator translation.
+#148 translates every REST decision that the generator can use; the others are not used or are errors (the owner decided this on 2026-11-24). Thus, #138, #140, #141, and #142 change only the runtime and the fixtures, not the generator translation.
 
 ## 7. Changes outside the module
 

@@ -92,7 +92,9 @@ Thus, a generated class and the runtime use the same decisions.
 - Build plugins: put `<NAME>.mapping.json` in the source directory. It replaces `<NAME>.cpy` and its options file. See the [Gradle plugin](Copybook-generator-Gradle-plugin#mapping-specs) and the [Maven plugin](Copybook-generator-Maven-plugin#mapping-specs).
 - Java: `Copybooks.generate(spec, generateOptions)`.
 
-The generator uses the COBOL side, the dates, the table modes, the variants, and the Java names. It does not use the JSON names and the directions of the items.
+The generator uses the COBOL side, the dates, the table modes, the variants, and the Java names.
+It does not use the JSON names, the directions of the items, the JSON types `TEXT`, `NUMBER`, and `DECIMAL_STRING`, and the counters.
+A `counter` must be the `OCCURS DEPENDING ON` item, else the generator gives an error.
 A decision that the generator cannot use is an error with the path and the source line.
 For the full translation, see [Mapping spec](Copybook-generator#mapping-spec) in the generator page.
 
