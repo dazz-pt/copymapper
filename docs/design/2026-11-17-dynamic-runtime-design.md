@@ -385,7 +385,7 @@ The generated codec does not pad a subtype at the operation level, and it does n
 
 - A node can have an optional `javaName`: the class name of the record, a group, a table, or an alternative, or the field name of an item. Without it, the generator rules apply. `javaName` is not in the canonical form when it is `null`, so the hash of a spec without Java names does not change.
 - A mapping spec with an item that the generator cannot express gives an error diagnostic with the path and the source line. Example: an item that the runtime supports and the generator does not.
-- #148 covers the types of #136. Each later issue (#138, #140, #141, #142) adds its translation.
+- #148 translates every REST decision of the table above, for all types that the generator supports. The owner decided this on 2026-11-24. Thus, the later issues (#138, #140, #141, #142) do not change the translation.
 
 ### 5.13 The CTG timeout for one call (#143)
 
@@ -416,7 +416,7 @@ The generated codec does not pad a subtype at the operation level, and it does n
 | 1 | #135 | This design. |
 | 2 | #147 | `copymapper-copybook` on Jackson 3. |
 | 3 | #136 | The mapping spec, its JSON form, and the draft (in `copymapper-copybook`). The module `copymapper-runtime`, the compiler, and the layout. The types `PIC X`, `PIC 9` `DISPLAY`, `COMP-3`, groups, and `FILLER`. |
-| 4 | #148 | Java classes from a mapping spec, for the types of #136. |
+| 4 | #148 | Java classes from a mapping spec, with the translation of every REST decision. |
 | 5 | #137 | The codec for the types of #136, with the directions and the JSON names. |
 | 6 | #139 | The test kit, with fixtures for #136 and #137. |
 | 7 | #138 | Fixed `OCCURS`, with count mode and the markers. |
@@ -425,7 +425,9 @@ The generated codec does not pad a subtype at the operation level, and it does n
 | 10 | #142 | `REDEFINES` with a discriminator or a fixed selection. |
 | any | #143, #144 | The CTG transport. Independent of the runtime. |
 
-Each issue after #139 adds its rules to the mapping spec, the compiler, the codec, and the generator translation, and adds its fixtures to the test kit.
+Each issue after #139 adds its rules to the mapping spec, the compiler, and the codec, and adds its fixtures to the test kit.
+
+#148 translates every REST decision (the owner decided this on 2026-11-24). Thus, #138, #140, #141, and #142 change only the runtime and the fixtures, not the generator translation.
 
 ## 7. Changes outside the module
 

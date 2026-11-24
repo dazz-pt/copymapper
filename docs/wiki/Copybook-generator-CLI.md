@@ -363,6 +363,9 @@ dependencies {
 | `Copybooks.toModel(Path copybook, ParseOptions parse, MappingOptions mapping)` | The model and the diagnostics. No Java. |
 | `Copybooks.generate(Path copybook, ParseOptions parse, MappingOptions mapping, GenerateOptions generate)` | The model, the Java files, and the diagnostics. |
 | `Copybooks.generate(BookModel model, GenerateOptions generate)` | The Java files of a model. |
+| `Copybooks.toModel(MappingSpec spec)` | The model of a mapping spec, and the diagnostics. No Java. |
+| `Copybooks.generate(MappingSpec spec, GenerateOptions generate)` | The model, the Java files, and the diagnostics of a mapping spec. |
+| `Copybooks.generate(MappingSpec spec, Integer maxRecordLength, GenerateOptions generate)` | The same, with a warning for a record that is longer than `maxRecordLength` bytes. |
 
 Each method returns a `Copybooks.Result` with `model()`, `files()`, and `diagnostics()`. `hasErrors()` tells if an error exists.
 `ModelJson.write(BookModel)` and `ModelJson.read(String)` convert a model to JSON and back.

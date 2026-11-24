@@ -83,6 +83,19 @@ The draft has a default REST side:
 Edit the JSON to change the REST side. The record name can be in any case.
 `DraftOptions` sets the charset. `DraftOptions.defaults()` uses `IBM037`.
 
+## Java classes from a spec
+
+The copybook generator also reads a mapping spec. It writes the annotated Java classes of the record.
+Thus, a generated class and the runtime use the same decisions.
+
+- CLI: `draft <copybook> --record-name <NAME> --output <file.mapping.json>` writes a draft. `generate <file.mapping.json>` writes the classes. See [Copybook generator CLI](Copybook-generator-CLI#draft-a-mapping-spec-and-generate-from-it).
+- Build plugins: put `<NAME>.mapping.json` in the source directory. It replaces `<NAME>.cpy` and its options file. See the [Gradle plugin](Copybook-generator-Gradle-plugin#mapping-specs) and the [Maven plugin](Copybook-generator-Maven-plugin#mapping-specs).
+- Java: `Copybooks.generate(spec, generateOptions)`.
+
+The generator uses the COBOL side, the dates, the table modes, the variants, and the Java names. It does not use the JSON names and the directions of the items.
+A decision that the generator cannot use is an error with the path and the source line.
+For the full translation, see [Mapping spec](Copybook-generator#mapping-spec) in the generator page.
+
 ## The layout compiler
 
 `LayoutCompiler.compile(spec)` checks a spec and computes the offset and the length of each item.
