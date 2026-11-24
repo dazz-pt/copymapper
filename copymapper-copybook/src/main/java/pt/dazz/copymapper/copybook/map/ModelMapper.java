@@ -170,6 +170,7 @@ public final class ModelMapper {
     public static MapResult map(Copybook copybook, MappingOptions options,
                                 Map<DataItem, String> javaNames) {
         ModelMapper mapper = new ModelMapper(copybook, options, javaNames);
+        mapper.javaNames.check();
         mapper.redefines.checkDecisions();
         mapper.dates = new DateHints(mapper);
         OperationHandlers handlers = new OperationHandlers(mapper, copybook.records());

@@ -93,13 +93,6 @@ class JavaNameOverrideTest {
     // ---- the classes ----
 
     @Test
-    void withoutJavaNamesTheResultIsTheSame() {
-        Named named = new Named("01 ORDER-REC.", "   05 A PIC X.");
-        assertThat(named.map()).isEqualTo(ModelMapper.map(named.copybook,
-            MappingOptions.defaults()));
-    }
-
-    @Test
     void theRecordGetsItsJavaName() {
         MapResult result = new Named("01 ORDER-REC.", "   05 A PIC X.")
             .name("ORDER-REC", "PurchaseOrder").map();
@@ -261,5 +254,58 @@ class JavaNameOverrideTest {
         assertThat(errors(result)).containsExactly(
             "ORDER.cpy:2:4: error: A has a text picture and must not have COMP or COMP-3",
             "ORDER.cpy:3:4: error: DEPENDING ON item NOPE does not exist");
+    }
+
+    @Test
+    void aClassNameOfJavaLangIsAnError() {
+        MapResult result = new Named("01 R.", "   05 LINES OCCURS 2.", "      10 QTY PIC 9.",
+            "   05 CODES PIC X OCCURS 2.")
+            .name("R", "String").name("R.LINES", "Record").name("R.CODES", "Object").map();
+        assertThat(errors(result)).containsExactly(
+            "ORDER.cpy:1:1: error: the Java name String of R is the name of a java.lang class",
+            "ORDER.cpy:2:4: error: the Java name Record of LINES is the name of a java.lang"
+                + " class",
+            "ORDER.cpy:4:4: error: the Java name Object of CODES is the name of a java.lang"
+                + " class");
+    }
+
+    @Test
+    void aJavaLangNameIsAValidFieldName() {
+        MapResult result = new Named("01 R.", "   05 A PIC X.").name("R.A", "String").map();
+        assertThat(diagnostics(result)).isEmpty();
+        assertThat(type(result, "R").members()).extracting(MemberModel::name)
+            .containsExactly("String");
+    }
+
+    @Test
+    void aRestrictedNameIsAnErrorForAClass() {
+        MapResult result = new Named("01 R.", "   05 LINES OCCURS 2.", "      10 QTY PIC 9.",
+            "   05 V PIC X.")
+            .name("R.LINES", "var").name("R.V", "var").map();
+        assertThat(errors(result)).containsExactly("ORDER.cpy:2:4: error: the Java name var of"
+            + " LINES is a restricted name and cannot be a class name");
+    }
+
+    @Test
+    void aJavaNameThatIsNotAnIdentifierIsAnError() {
+        MapResult result = new Named("01 R.", "   05 A PIC X.", "   05 B PIC X.",
+            "   05 LINES OCCURS 2.", "      10 QTY PIC 9.", "   05 G.", "      10 C PIC X.")
+            .name("R.A", "my-name").name("R.B", "class").name("R.LINES", "a.Line")
+            .name("R.G", "").map();
+        assertThat(result.model()).isNull();
+        assertThat(errors(result)).containsExactly(
+            "ORDER.cpy:2:4: error: the Java name my-name of A is not a Java identifier",
+            "ORDER.cpy:3:4: error: the Java name class of B is not a Java identifier",
+            "ORDER.cpy:4:4: error: the Java name a.Line of LINES is not a Java identifier",
+            "ORDER.cpy:6:4: error: the Java name  of G is not a Java identifier");
+    }
+
+    @Test
+    void aJavaNameOnAFillerIsAnError() {
+        Named named = new Named("01 R.", "   05 FILLER PIC X.", "   05 A PIC X.");
+        named.javaNames.put(named.copybook.records().get(0).children().get(0), "pad");
+        MapResult result = named.map();
+        assertThat(errors(result)).containsExactly("ORDER.cpy:2:4: error: the Java name pad"
+            + " is on a FILLER. The generator gives no Java name to a FILLER.");
     }
 }
