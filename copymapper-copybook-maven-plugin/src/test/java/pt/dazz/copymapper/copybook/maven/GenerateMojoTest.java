@@ -256,6 +256,17 @@ class GenerateMojoTest {
     }
 
     @Test
+    void anExcludedSpecNextToASelectedCopybookIsStillUsed() throws Exception {
+        mojo.sourceDir = TestCopybooks.copy("spec", dir).toFile();
+        mojo.excludes = List.of("**/*.mapping.json");
+        mojo.execute();
+        assertThat(log.errors).isEmpty();
+        // ORDER.cpy is not valid, so the class comes from ORDER.mapping.json.
+        assertThat(out("com/example/ordering/Order.java")).content().contains("orderId");
+        assertThat(out("com/example/mainframe/payments/Payment.java")).doesNotExist();
+    }
+
+    @Test
     void specChangeChangesTheFingerprint() throws Exception {
         Path source = TestCopybooks.copy("spec", dir);
         mojo.sourceDir = source.toFile();

@@ -41,6 +41,7 @@ import pt.dazz.copymapper.copybook.parse.CopybookParser;
 import pt.dazz.copymapper.copybook.spec.DraftOptions;
 import pt.dazz.copymapper.copybook.spec.JsonType;
 import pt.dazz.copymapper.copybook.spec.MappingSpec;
+import pt.dazz.copymapper.copybook.spec.MappingSpecJson;
 import pt.dazz.copymapper.copybook.spec.MappingSpecs;
 import pt.dazz.copymapper.copybook.spec.SpecNode;
 import pt.dazz.copymapper.copybook.spec.TableMode;
@@ -313,7 +314,9 @@ class SpecParityTest {
             MappingSpec spec = new MappingSpec(draft.formatVersion(), draft.sourceName(),
                 draft.sourceHash(), draft.charset(), draft.byteOrder(),
                 apply(draft.root(), decisions, unused));
-            Copybooks.Result result = Copybooks.generate(spec, PLAIN);
+            // The tools read a spec from its JSON form, so the test does too.
+            MappingSpec read = MappingSpecJson.read(MappingSpecJson.write(spec));
+            Copybooks.Result result = Copybooks.generate(read, PLAIN);
             assertNoErrors(result);
             files.addAll(result.files());
         }

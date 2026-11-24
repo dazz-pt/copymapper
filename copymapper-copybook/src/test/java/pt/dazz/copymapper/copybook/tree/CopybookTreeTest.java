@@ -457,6 +457,19 @@ class CopybookTreeTest {
     }
 
     @Test
+    void anExcludedSpecNextToASelectedCopybookIsStillUsed() throws IOException {
+        Path source = spec();
+        List<Path> selected = inputs(source).stream()
+            .filter(file -> !file.endsWith("orders/ORDER.mapping.json")).toList();
+        assertThat(selected).contains(source.resolve("orders/ORDER.cpy"));
+        CopybookTree.run(settings(source, List.of(), BASE, false, false), selected, output,
+            log);
+        assertThat(log.errors).isEmpty();
+        assertThat(output.resolve("com/example/ordering/Order.java")).content()
+            .contains("orderId");
+    }
+
+    @Test
     void theCopybookThatASpecReplacesHasAnError() throws IOException {
         Path source = spec();
         Path alone = Files.createDirectories(work.resolve("alone"));
