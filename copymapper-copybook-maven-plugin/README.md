@@ -107,7 +107,7 @@ If `packageName` is necessary and not set, the build fails with this message: `S
 A user property has an effect only when the POM does not set the parameter.
 
 The goal writes each diagnostic of the generator to the Maven log as `[ERROR]` or `[WARNING]`. An `info:` diagnostic also shows as `[WARNING]`.
-The goal checks all copybooks before it fails. Then the build fails with `N copybook(s) have errors. See the messages above.`
+The goal checks all copybooks and mapping specs before it fails. Then the build fails with `N input(s) have errors. See the messages above.`
 If a copybook has an error, the goal writes no file. Thus, after a failure, `outputDir` is empty.
 
 **WARNING:** Do not set `outputDir` to a directory that contains other files, for example `src/main/java`. Each run deletes all files in `outputDir`, and you can lose your source files.

@@ -164,7 +164,7 @@ class GenerateMojoTest {
         TestCopybooks.copy("broken", source);
         mojo.sourceDir = source.toFile();
         assertThatThrownBy(mojo::execute).isExactlyInstanceOf(MojoFailureException.class)
-            .hasMessage("2 copybook(s) have errors. See the messages above.");
+            .hasMessage("2 input(s) have errors. See the messages above.");
         assertThat(log.warnings).anySatisfy(w -> assertThat(w).contains("is skipped"));
         assertThat(log.errors).hasSize(2);
         assertThat(log.infos).anySatisfy(i -> assertThat(i)

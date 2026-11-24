@@ -198,7 +198,7 @@ These rules apply:
 - To remove a spec next to a copybook from the inputs, exclude the spec and the copybook. If the goal selects the copybook, it uses the spec.
 - The spec gets its package from its directory and from `<NAME>`, with the rules of [Packages from directories](#packages-from-directories).
 - An options file `<NAME>.json` next to a spec can set only `package` and `lombok`. Another key is an error, and the build fails.
-- `maxRecordLength` does not apply to a spec.
+- A file with a name that ends with `.mapping.json`, in lower case, is always a spec. Thus, the file `X.mapping.json` next to a copybook `X.mapping.cpy` is a spec, not the options file of that copybook. To give options to that copybook, rename it, for example to `X-MAPPING.cpy`, and use `X-MAPPING.json`.
 
 ```
 src/main/copybook/orders/GET-ORDER.cpy            the goal does not read this file
@@ -332,7 +332,7 @@ Give each execution its own `sourceDir` and its own `outputDir`. Each execution 
 The goal writes each diagnostic of the generator to the Maven log as `[ERROR]`, `[WARNING]`, or `[INFO]`. An `info:` diagnostic shows as `[INFO]`.
 The file in each line is the name of the copybook or of the `COPY` member, without the directory.
 
-- The goal checks all copybooks before it fails. Then the build fails with `N copybook(s) have errors. See the messages above.`
+- The goal checks all copybooks and mapping specs before it fails. Then the build fails with `N input(s) have errors. See the messages above.`
 - The goal checks for class name collisions only when no copybook has an error.
 - A missing `packageName` stops the goal at once.
 - If the goal cannot read an input, the message starts with `Cannot read the inputs of the generation:`.
@@ -449,7 +449,7 @@ copymapper-examples-maven-plugin/mvnw -B -f copymapper-examples-maven-plugin/pom
 | `copy member '...' not found in ...` | Add the directory of the member to `copyDirs`. The search is not recursive. |
 | `Two copybooks generate the same class` | See [Class name collisions](#class-name-collisions). |
 | `copy member '...' not found: no copy directory is set` | Set `copyDirs` in the configuration or in the options file. |
-| `N copybook(s) have errors. See the messages above.` | Read the `[ERROR]` lines above the failure. Each line gives the file, the line, and the column. |
+| `N input(s) have errors. See the messages above.` | Read the `[ERROR]` lines above the failure. Each line gives the file, the line, and the column. |
 | A generated file is missing, but the goal logs `The generated classes are up to date.` | Delete `target/copymapper-copybook/`, or run `mvn clean`. |
 | `No plugin found for prefix 'copymapper-copybook'` | Add `pt.dazz.copymapper` to `<pluginGroups>`, or use the full coordinates. |
 | The generated classes have no codec at runtime | Add `copymapper-processor` to `annotationProcessorPaths` in the module that runs the plugin. |

@@ -274,7 +274,7 @@ class CopyMapperCopybookPluginFunctionalTest {
             """);
         String output = fail("build").getOutput();
         assertThat(output).contains("BAD.cpy:2:", "WORSE.cpy:2:",
-            "2 copybook(s) have errors. See the messages above.");
+            "2 input(s) have errors. See the messages above.");
     }
 
     @Test

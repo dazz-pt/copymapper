@@ -6,12 +6,13 @@ import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Stream;
 import javax.lang.model.SourceVersion;
@@ -148,7 +149,7 @@ public final class CopybookTree {
         }
         if (failed > 0) {
             throw new CopybookTreeException(failed
-                + " copybook(s) have errors. See the messages above.");
+                + " input(s) have errors. See the messages above.");
         }
         checkCollisions(settings, generated);
         for (Generated result : generated) {
@@ -194,16 +195,16 @@ public final class CopybookTree {
     }
 
     /**
-     * Tells if a file is a mapping spec: its name ends with {@code .mapping.json}, in upper or
-     * lower case, after a base name that is not empty.
+     * Tells if a file is a mapping spec: its name ends with {@code .mapping.json}, in lower
+     * case, after a base name that is not empty. The check is case-sensitive, as the scan of
+     * the plugins.
      *
      * @param file the file
      * @return {@code true} for a mapping spec
      */
     public static boolean isSpec(Path file) {
         String name = file.getFileName().toString();
-        return name.length() > SPEC_SUFFIX.length()
-            && name.toLowerCase(Locale.ROOT).endsWith(SPEC_SUFFIX);
+        return name.length() > SPEC_SUFFIX.length() && name.endsWith(SPEC_SUFFIX);
     }
 
     /**
@@ -214,9 +215,19 @@ public final class CopybookTree {
         Set<Path> inputs = new LinkedHashSet<>();
         for (Path file : files) {
             Path spec = file.resolveSibling(baseName(file) + SPEC_SUFFIX);
-            inputs.add(!isSpec(file) && Files.isRegularFile(spec) ? spec : file);
+            inputs.add(!isSpec(file) && exists(spec) ? spec : file);
         }
         return List.copyOf(inputs);
+    }
+
+    /**
+     * Tells if a file exists with exactly this name. On a file system that ignores the case,
+     * {@code X.MAPPING.JSON} also matches {@code X.mapping.json}; the real name must match.
+     */
+    private static boolean exists(Path file) {
+        String[] names = file.toAbsolutePath().getParent().toFile().list();
+        return Files.isRegularFile(file) && Arrays.asList(Objects.requireNonNullElse(names,
+            new String[0])).contains(file.getFileName().toString());
     }
 
     /** Generates one copybook or mapping spec. Gives {@code null} if the input has an error. */
@@ -245,7 +256,7 @@ public final class CopybookTree {
         Copybooks.Result result;
         if (isSpec(copybook)) {
             prefix = relative(settings.sourceDir(), copybook) + ": ";
-            result = generateSpec(copybook, options, prefix, log);
+            result = generateSpec(copybook, settings.maxRecordLength(), options, prefix, log);
             if (result == null) {
                 return null;
             }
@@ -287,10 +298,12 @@ public final class CopybookTree {
     }
 
     /** Reads and generates a mapping spec. Gives {@code null} if the file is not valid. */
-    private static Copybooks.Result generateSpec(Path spec, GenerateOptions options,
-                                                 String prefix, Log log) {
+    private static Copybooks.Result generateSpec(Path spec, Integer maxRecordLength,
+                                                 GenerateOptions options, String prefix,
+                                                 Log log) {
         try {
-            return Copybooks.generate(MappingSpecJson.read(Files.readString(spec)), options);
+            return Copybooks.generate(MappingSpecJson.read(Files.readString(spec)),
+                maxRecordLength, options);
         } catch (MappingSpecFormatException e) {
             log.error(prefix + e.getMessage());
         } catch (IOException e) {
@@ -383,7 +396,7 @@ public final class CopybookTree {
     public static String relativePath(Path base, Path file) {
         Path from = base.toAbsolutePath().normalize();
         Path to = file.toAbsolutePath().normalize();
-        Path path = java.util.Objects.equals(from.getRoot(), to.getRoot())
+        Path path = Objects.equals(from.getRoot(), to.getRoot())
             ? from.relativize(to) : to;
         return path.toString().replace('\\', '/');
     }

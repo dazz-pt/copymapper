@@ -229,6 +229,6 @@ class CopyMapperCopybookPluginTest {
         spec().getSourceDir().set(source.toFile());
         spec().getPackageName().set("com.example.mainframe");
         assertThatThrownBy(task::generate).isExactlyInstanceOf(GradleException.class)
-            .hasMessage("2 copybook(s) have errors. See the messages above.");
+            .hasMessage("2 input(s) have errors. See the messages above.");
     }
 }

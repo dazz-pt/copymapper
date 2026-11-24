@@ -98,4 +98,31 @@ class CopybooksSpecTest {
         assertThat(result.hasErrors()).as(result.diagnostics().toString()).isFalse();
         assertThat(result.files().get(0).toString()).contains("getRenamedField");
     }
+
+    @Test
+    void maxRecordLengthGivesAWarningForASpec() {
+        Copybooks.Result result = Copybooks.generate(draft(), 4, GENERATE);
+        assertThat(result.hasErrors()).isFalse();
+        assertThat(result.files()).isNotEmpty();
+        assertThat(result.diagnostics()).anySatisfy(d -> assertThat(d.format())
+            .isEqualTo("R.cpy:1:1: warning: record R has 7 bytes, more than the maximum"
+                + " record length of 4 bytes."));
+    }
+
+    @Test
+    void noMaxRecordLengthGivesNoWarningForASpec() {
+        assertThat(Copybooks.generate(draft(), null, GENERATE).diagnostics())
+            .noneSatisfy(d -> assertThat(d.message()).contains("maximum"));
+        assertThat(Copybooks.generate(draft(), 7, GENERATE).diagnostics())
+            .noneSatisfy(d -> assertThat(d.message()).contains("maximum"));
+    }
+
+    @Test
+    void maxRecordLengthKeepsTheOtherDecisionsOfASpec() {
+        Copybooks.Result result = Copybooks.generate(withJavaName(draft(), "code"), 4,
+            GENERATE);
+        assertThat(result.files().get(0).toString()).contains("code");
+        assertThat(Copybooks.generate(withBadName(draft()), 4, GENERATE).hasErrors())
+            .isTrue();
+    }
 }

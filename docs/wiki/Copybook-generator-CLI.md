@@ -63,21 +63,21 @@ A `generate` input that ends with `.mapping.json` is a mapping spec. Each other 
 | `--charset <name>` | `parse`, `generate`, `draft` | The charset of the copybook files. Default: UTF-8. |
 | `--copy-dir <dir>` | `parse`, `generate`, `draft` | A directory with `COPY` members. Repeat the option for more directories. |
 | `--record-name <name>` | `parse`, `generate`, `draft` | The record name for a copybook without level `01`. Default: the file name. For `draft`: the record to draft. Mandatory for `draft`. |
-| `--strip-prefix <prefix>` | both | A prefix to remove from names, for example `WS-`. Repeat the option for more prefixes. |
-| `--input-marker <word>` | both | A name part that marks an input alternative. Write it in upper case. Repeat the option for more words. |
-| `--output-marker <word>` | both | A name part that marks an output alternative. Write it in upper case. Repeat the option for more words. |
-| `--direction <name>=<direction>` | both | The direction (`INPUT`, `OUTPUT`, or `INPUT_OUTPUT`) of a `REDEFINES` alternative. The direction is not case-sensitive. Repeat the option for more alternatives. |
-| `--count-field <table>=<field>` | both | The count field of a fixed table (`OCCURS n`). The generator writes `dependsOn` on the table. Repeat the option for more tables. See [Count field of a fixed table](Copybook-generator#count-field-of-a-fixed-table). |
+| `--strip-prefix <prefix>` | `parse`, `generate` | A prefix to remove from names, for example `WS-`. Repeat the option for more prefixes. |
+| `--input-marker <word>` | `parse`, `generate` | A name part that marks an input alternative. Write it in upper case. Repeat the option for more words. |
+| `--output-marker <word>` | `parse`, `generate` | A name part that marks an output alternative. Write it in upper case. Repeat the option for more words. |
+| `--direction <name>=<direction>` | `parse`, `generate` | The direction (`INPUT`, `OUTPUT`, or `INPUT_OUTPUT`) of a `REDEFINES` alternative. The direction is not case-sensitive. Repeat the option for more alternatives. |
+| `--count-field <table>=<field>` | `parse`, `generate` | The count field of a fixed table (`OCCURS n`). The generator writes `dependsOn` on the table. Repeat the option for more tables. See [Count field of a fixed table](Copybook-generator#count-field-of-a-fixed-table). |
 | `--empty-item <table>=SPACES\|LOW-VALUES` | `parse`, `generate` | The bytes of an unused entry of a fixed table. The generator writes `emptyItem` on the table. Repeat the option for more tables. See [Empty entries of a fixed table](Copybook-generator#empty-entries-of-a-fixed-table). |
-| `--empty-key <table>=<item>` | both | The key item that marks an empty entry of a fixed table. The generator writes `emptyKey` on the table. Repeat the option for more tables. |
-| `--partial-table <table>` | both | A fixed table that a response can end inside, on an entry boundary. The generator writes `partial = true` on the table. Repeat the option for more tables. See [Partial tables](Copybook-generator#partial-tables). |
-| `--view <item>` | both | A `REDEFINES` area to map to views: the redefined item or an alternative. Repeat the option for more areas. See [Views](Copybook-generator#views). |
-| `--max-record-length <bytes>` | both | The maximum record length. A longer record gives a warning. Default: no check. See [Record length](Copybook-generator#record-length). |
-| `--conditions <name>=<mode>` | both | The mode (`enum`, `constants`, or `none`) of the level 88 items of an elementary item. The mode is not case-sensitive. Repeat the option for more items. See [Level 88 items](Copybook-generator#level-88-items). |
-| `--date <name>=<pattern>` | both | A date hint: the date or time pattern of an item. A name with `*` is a name pattern, for example `*-DATE=yyyyMMdd`. Repeat the option for more hints. See [Date hints](Copybook-generator#date-hints). |
-| `--continuable <record>=<class>` | both | The handler class of a `Continuable` record. See [Continuable and Validatable](Copybook-generator#continuable-and-validatable). |
-| `--validatable <record>=<class>` | both | The handler class of a `Validatable` record. |
-| `--config <file.json>` | both | An [options file](Copybook-generator#options-file) with all options. |
+| `--empty-key <table>=<item>` | `parse`, `generate` | The key item that marks an empty entry of a fixed table. The generator writes `emptyKey` on the table. Repeat the option for more tables. |
+| `--partial-table <table>` | `parse`, `generate` | A fixed table that a response can end inside, on an entry boundary. The generator writes `partial = true` on the table. Repeat the option for more tables. See [Partial tables](Copybook-generator#partial-tables). |
+| `--view <item>` | `parse`, `generate` | A `REDEFINES` area to map to views: the redefined item or an alternative. Repeat the option for more areas. See [Views](Copybook-generator#views). |
+| `--max-record-length <bytes>` | `parse`, `generate` | The maximum record length. A longer record gives a warning. Default: no check. See [Record length](Copybook-generator#record-length). |
+| `--conditions <name>=<mode>` | `parse`, `generate` | The mode (`enum`, `constants`, or `none`) of the level 88 items of an elementary item. The mode is not case-sensitive. Repeat the option for more items. See [Level 88 items](Copybook-generator#level-88-items). |
+| `--date <name>=<pattern>` | `parse`, `generate` | A date hint: the date or time pattern of an item. A name with `*` is a name pattern, for example `*-DATE=yyyyMMdd`. Repeat the option for more hints. See [Date hints](Copybook-generator#date-hints). |
+| `--continuable <record>=<class>` | `parse`, `generate` | The handler class of a `Continuable` record. See [Continuable and Validatable](Copybook-generator#continuable-and-validatable). |
+| `--validatable <record>=<class>` | `parse`, `generate` | The handler class of a `Validatable` record. |
+| `--config <file.json>` | `parse`, `generate` | An [options file](Copybook-generator#options-file) with all options. |
 
 With a model input or a mapping spec input, the parse and mapping options (`--format` to `--validatable`, `--empty-item`, `--empty-key`, `--partial-table`, and `--view`) are not permitted. The model or the spec already contains their result.
 With a model input, the generator uses only `package` and `lombok` from the options file. It ignores the other keys.

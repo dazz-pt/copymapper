@@ -134,8 +134,7 @@ final class Arguments {
 
     /** Tells if the input is a mapping spec file. */
     boolean specInput() {
-        return input.getFileName().toString().toLowerCase(java.util.Locale.ROOT)
-            .endsWith(".mapping.json");
+        return input.getFileName().toString().endsWith(".mapping.json");
     }
 
     /** Tells if the input is a model JSON file. */

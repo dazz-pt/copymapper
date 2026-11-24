@@ -125,7 +125,7 @@ class CopybookTreeTest {
             settings(source, List.of(), BASE, false, false),
             List.of(source.resolve("billing/INVOICE.cpy")), output, log))
             .isInstanceOf(CopybookTreeException.class)
-            .hasMessage("1 copybook(s) have errors. See the messages above.");
+            .hasMessage("1 input(s) have errors. See the messages above.");
         assertThat(log.errors).anySatisfy(e -> assertThat(e)
             .contains("copy member 'ADDRESS' not found"));
     }
@@ -134,7 +134,7 @@ class CopybookTreeTest {
     void reportsErrorsOfAllCopybooks() {
         assertThatThrownBy(() -> run("broken", List.of(), BASE, false, false))
             .isInstanceOf(CopybookTreeException.class)
-            .hasMessage("2 copybook(s) have errors. See the messages above.");
+            .hasMessage("2 input(s) have errors. See the messages above.");
         assertThat(log.errors).anySatisfy(e -> assertThat(e).contains("BAD.cpy"));
         assertThat(log.errors).anySatisfy(e -> assertThat(e).contains("WORSE.cpy"));
         assertThat(output).isEmptyDirectory();
@@ -248,7 +248,7 @@ class CopybookTreeTest {
     void invalidJsonGivesTheFilePath() {
         assertThatThrownBy(() -> run("badjson", List.of(), BASE, false, false))
             .isInstanceOf(CopybookTreeException.class)
-            .hasMessage("1 copybook(s) have errors. See the messages above.");
+            .hasMessage("1 input(s) have errors. See the messages above.");
         assertThat(log.errors).singleElement().asString()
             .startsWith(work.resolve("badjson/SHIPMENT.json") + ": ");
     }
@@ -266,7 +266,7 @@ class CopybookTreeTest {
             settings(source, List.of(), BASE, false, false),
             List.of(source.resolve("SHIPMENT.cpy")), output, log))
             .isInstanceOf(CopybookTreeException.class)
-            .hasMessage("1 copybook(s) have errors. See the messages above.");
+            .hasMessage("1 input(s) have errors. See the messages above.");
         assertThat(log.errors).singleElement().asString()
             .startsWith(source.resolve("SHIPMENT.json") + ": cannot read the file: ");
         assertThat(CopybookTree.configCopyDirs(List.of(source.resolve("SHIPMENT.cpy"))))
@@ -293,7 +293,7 @@ class CopybookTreeTest {
             settings(source, List.of(), BASE, false, false),
             List.of(source.resolve("SHIPMENT.cpy")), output, log))
             .isInstanceOf(CopybookTreeException.class)
-            .hasMessage("1 copybook(s) have errors. See the messages above.");
+            .hasMessage("1 input(s) have errors. See the messages above.");
         assertThat(log.errors).containsExactly("SHIPMENT.cpy: the package 'com.my-co.shipping'"
             + " is not a valid Java package name");
     }
@@ -418,7 +418,8 @@ class CopybookTreeTest {
     @Test
     void isSpecIgnoresTheCase() {
         assertThat(CopybookTree.isSpec(Path.of("a/ORDER.mapping.json"))).isTrue();
-        assertThat(CopybookTree.isSpec(Path.of("ORDER.MAPPING.JSON"))).isTrue();
+        assertThat(CopybookTree.isSpec(Path.of("ORDER.MAPPING.JSON"))).isFalse();
+        assertThat(CopybookTree.isSpec(Path.of("ORDER.Mapping.json"))).isFalse();
         assertThat(CopybookTree.isSpec(Path.of("ORDER.json"))).isFalse();
         assertThat(CopybookTree.isSpec(Path.of("ORDER.mapping.cpy"))).isFalse();
         assertThat(CopybookTree.isSpec(Path.of("mapping.json"))).isFalse();
@@ -430,8 +431,8 @@ class CopybookTreeTest {
     void optionsFileOfASpec() {
         assertThat(CopybookTree.optionsFile(Path.of("a/ORDER.mapping.json")))
             .isEqualTo(Path.of("a/ORDER.json"));
-        assertThat(CopybookTree.optionsFile(Path.of("a/ORDER.Mapping.JSON")))
-            .isEqualTo(Path.of("a/ORDER.json"));
+        assertThat(CopybookTree.optionsFile(Path.of("a/ORDER.MAPPING.JSON")))
+            .isEqualTo(Path.of("a/ORDER.MAPPING.json"));
     }
 
     @Test
@@ -484,6 +485,31 @@ class CopybookTreeTest {
     }
 
     @Test
+    void maxRecordLengthOfTheSettingsAppliesToASpec() throws IOException {
+        Path source = spec();
+        CopybookTree.run(settings(source, List.of(), BASE, false, false, 4), inputs(source),
+            output, log);
+        assertThat(log.warnings).contains("payments/PAYMENT.mapping.json: PAYMENT.cpy:1:8:"
+            + " warning: record PAYMENT has 8 bytes, more than the maximum record length of 4"
+            + " bytes.");
+        assertThat(output.resolve("com/example/mainframe/payments/Payment.java")).exists();
+    }
+
+    @Test
+    void anUpperCaseSpecNameIsNotASpec() throws IOException {
+        Path source = Files.createDirectories(work.resolve("upper"));
+        Files.writeString(source.resolve("PAY.cpy"),
+            "       01  PAY-RECORD.\n           05  PAY-ID               PIC X(4).\n");
+        Files.copy(TestCopybooks.copy("spec", work).resolve("payments/PAYMENT.mapping.json"),
+            source.resolve("PAY.MAPPING.JSON"));
+        CopybookTree.run(settings(source, List.of(), BASE, false, false),
+            List.of(source.resolve("PAY.cpy")), output, log);
+        assertThat(log.errors).isEmpty();
+        assertThat(output.resolve("com/example/mainframe/PayRecord.java")).exists();
+        assertThat(output.resolve("com/example/mainframe/Payment.java")).doesNotExist();
+    }
+
+    @Test
     void specDiagnosticsNameTheSpec() throws IOException {
         Path source = spec();
         CopybookTree.run(settings(source, List.of(), BASE, false, false), inputs(source),
@@ -523,7 +549,7 @@ class CopybookTreeTest {
         assertThatThrownBy(() -> CopybookTree.run(
             settings(source, List.of(), BASE, false, false), inputs(source), output, log))
             .isInstanceOf(CopybookTreeException.class)
-            .hasMessage("1 copybook(s) have errors. See the messages above.");
+            .hasMessage("1 input(s) have errors. See the messages above.");
         assertThat(log.errors).containsExactly(source.resolve("orders/ORDER.json")
             + ": the options of a mapping spec permit only the keys package and lombok, not"
             + " 'stripPrefixes'");
@@ -548,7 +574,7 @@ class CopybookTreeTest {
         assertThatThrownBy(() -> CopybookTree.run(
             settings(source, List.of(), BASE, false, false), inputs(source), output, log))
             .isInstanceOf(CopybookTreeException.class)
-            .hasMessage("1 copybook(s) have errors. See the messages above.");
+            .hasMessage("1 input(s) have errors. See the messages above.");
         assertThat(log.errors).singleElement().asString()
             .startsWith("payments/PAYMENT.mapping.json: ");
     }
@@ -574,7 +600,7 @@ class CopybookTreeTest {
         assertThatThrownBy(() -> CopybookTree.run(
             settings(source, List.of(), BASE, false, false), inputs(source), output, log))
             .isInstanceOf(CopybookTreeException.class)
-            .hasMessage("1 copybook(s) have errors. See the messages above.");
+            .hasMessage("1 input(s) have errors. See the messages above.");
         assertThat(log.errors).singleElement().asString()
             .startsWith("payments/PAYMENT.mapping.json: PAYMENT.cpy:2:12: error: ");
         assertThat(output).isEmptyDirectory();

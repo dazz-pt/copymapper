@@ -187,7 +187,7 @@ These rules apply:
 - To remove a spec next to a copybook from the inputs, exclude the spec and the copybook. If the plugin selects the copybook, it uses the spec.
 - The spec gets its package from its directory and from `<NAME>`, with the rules of [Packages from directories](#packages-from-directories).
 - An options file `<NAME>.json` next to a spec can set only `package` and `lombok`. Another key is an error, and the build fails.
-- `maxRecordLength` does not apply to a spec.
+- A file with a name that ends with `.mapping.json`, in lower case, is always a spec. Thus, the file `X.mapping.json` next to a copybook `X.mapping.cpy` is a spec, not the options file of that copybook. To give options to that copybook, rename it, for example to `X-MAPPING.cpy`, and use `X-MAPPING.json`.
 
 ```
 src/main/copybook/orders/GET-ORDER.cpy            the plugin does not read this file
@@ -277,7 +277,7 @@ The task writes each diagnostic of the generator to the build log, in the format
 The file is the name of the copybook or of the `COPY` member, without the directory.
 
 - Errors have the level ERROR. Warnings have the level WARN. Infos have the level LIFECYCLE. Thus, an `info:` line also shows in the normal output, but it is not a warning.
-- The task checks all copybooks before it fails. Then the build fails with this message: `N copybook(s) have errors. See the messages above.`
+- The task checks all copybooks and mapping specs before it fails. Then the build fails with this message: `N input(s) have errors. See the messages above.`
 - The task checks for class name collisions only when no copybook has an error.
 - A missing `packageName` stops the task at once, with `Set copymapper.copybooks.packageName.`
 - If the task cannot write a file, the message is `Cannot write the generated classes: <detail>`.
@@ -341,7 +341,7 @@ copymapper-examples-gradle-plugin/
   settings.gradle.kts
   build.gradle.kts
   src/main/copybook/orders/GET-ORDER.cpy       the source of the mapping spec: the task does not read it
-  src/main/copybook/orders/GET-ORDER.mapping.json -> package ...orders: GetOrder, OrderLine
+  src/main/copybook/orders/GET-ORDER.mapping.json -> package ...orders: GetOrder, OrderLine, with the Java name totalAmount
   src/main/copybook/billing/GET-INVOICE.cpy    -> package ...billing: GetInvoice
   src/main/copybook/billing/GET-INVOICE.json   { "stripPrefixes": ["INV-"], "countFields": {...} }
   src/main/copylib/ADDRESS.cpy                 the COPY member of GET-INVOICE.cpy
@@ -362,7 +362,7 @@ It takes the plugin and the libraries from the source of the repository. Run it 
 | `Set copymapper.copybooks.packageName.` | Set `packageName` in the extension, or `package` in each options file. |
 | `copy member '...' not found in ...` | Add the directory of the member to `copyDirs`. The search is not recursive. |
 | `copy member '...' not found: no copy directory is set` | Set `copyDirs` in the extension or in the options file. |
-| `N copybook(s) have errors. See the messages above.` | Read the `error:` lines above the failure. Each line gives the file, the line, and the column. |
+| `N input(s) have errors. See the messages above.` | Read the `error:` lines above the failure. Each line gives the file, the line, and the column. |
 | `Cannot write the generated classes: ...` | Check that `outputDir` is a directory that you can write to. |
 | `Two copybooks generate the same class` | See [Class name collisions](#class-name-collisions). |
 | The build fails on a file that is not a copybook | Add an `exclude(...)` pattern for the file. |

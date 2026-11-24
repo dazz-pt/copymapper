@@ -486,6 +486,8 @@ class MainTest {
             + " options are not permitted with a mapping spec input",
         "generate A.mapping.json --package a --output-dir x --count-field A=B|parse and"
             + " mapping options are not permitted with a mapping spec input",
+        "generate A.MAPPING.JSON --package a --output-dir x --format free|parse and mapping"
+            + " options are not permitted with a model input",
         "parse A.cpy --lombok|the option --lombok is only for generate",
         "generate A.cpy --output a.json|the option --output is only for parse or draft",
         "parse A.cpy|the option --output is missing",

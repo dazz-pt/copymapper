@@ -109,17 +109,35 @@ public final class Copybooks {
     }
 
     /**
-     * Translates and maps a mapping spec. An error in the translation stops the run.
+     * Translates and maps a mapping spec.
      *
      * @param spec the mapping spec
      * @return the result, without Java files
      */
     public static Result toModel(MappingSpec spec) {
+        return toModel(spec, null);
+    }
+
+    /**
+     * Translates and maps a mapping spec, with a check of the record length. An error in the
+     * translation stops the run.
+     *
+     * @param spec the mapping spec
+     * @param maxRecordLength the maximum record length in bytes, or {@code null} for no check.
+     *     A longer record gives a warning.
+     * @return the result, without Java files
+     */
+    public static Result toModel(MappingSpec spec, Integer maxRecordLength) {
         Translation translation = SpecTranslator.translate(spec);
         if (translation.hasErrors()) {
             return new Result(null, List.of(), translation.diagnostics());
         }
-        MapResult mapped = ModelMapper.map(translation.copybook(), translation.options(),
+        MappingOptions o = translation.options();
+        MappingOptions options = new MappingOptions(o.stripPrefixes(), o.inputMarkers(),
+            o.outputMarkers(), o.directions(), o.subTypes(), o.countFields(), maxRecordLength,
+            o.dates(), o.continuable(), o.validatable(), o.conditions(), o.emptyItems(),
+            o.emptyKeys(), o.partialTables(), o.views());
+        MapResult mapped = ModelMapper.map(translation.copybook(), options,
             translation.javaNames());
         List<Diagnostic> diagnostics = new ArrayList<>(translation.diagnostics());
         diagnostics.addAll(mapped.diagnostics());
@@ -134,7 +152,21 @@ public final class Copybooks {
      * @return the result
      */
     public static Result generate(MappingSpec spec, GenerateOptions generate) {
-        Result model = toModel(spec);
+        return generate(spec, null, generate);
+    }
+
+    /**
+     * Translates, maps, and generates a mapping spec, with a check of the record length.
+     *
+     * @param spec the mapping spec
+     * @param maxRecordLength the maximum record length in bytes, or {@code null} for no check.
+     *     A longer record gives a warning.
+     * @param generate the generate options
+     * @return the result
+     */
+    public static Result generate(MappingSpec spec, Integer maxRecordLength,
+                                  GenerateOptions generate) {
+        Result model = toModel(spec, maxRecordLength);
         if (model.hasErrors()) {
             return model;
         }
