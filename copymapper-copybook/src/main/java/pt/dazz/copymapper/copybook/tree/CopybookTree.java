@@ -226,8 +226,8 @@ public final class CopybookTree {
      */
     private static boolean exists(Path file) {
         String[] names = file.toAbsolutePath().getParent().toFile().list();
-        return Files.isRegularFile(file) && Arrays.asList(Objects.requireNonNullElse(names,
-            new String[0])).contains(file.getFileName().toString());
+        return Arrays.asList(Objects.requireNonNullElse(names, new String[0]))
+            .contains(file.getFileName().toString()) && Files.isRegularFile(file);
     }
 
     /** Generates one copybook or mapping spec. Gives {@code null} if the input has an error. */

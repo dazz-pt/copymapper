@@ -509,6 +509,18 @@ class CopybookTreeTest {
     }
 
     @Test
+    void aDirectoryWithTheSpecNameIsNotASpec() throws IOException {
+        Path source = Files.createDirectories(work.resolve("directory"));
+        Files.writeString(source.resolve("PAY.cpy"),
+            "       01  PAY-RECORD.\n           05  PAY-ID               PIC X(4).\n");
+        Files.createDirectories(source.resolve("PAY.mapping.json"));
+        CopybookTree.run(settings(source, List.of(), BASE, false, false),
+            List.of(source.resolve("PAY.cpy")), output, log);
+        assertThat(log.errors).isEmpty();
+        assertThat(output.resolve("com/example/mainframe/PayRecord.java")).exists();
+    }
+
+    @Test
     void anUpperCaseSpecNameIsNotASpec() throws IOException {
         Path source = Files.createDirectories(work.resolve("upper"));
         Files.writeString(source.resolve("PAY.cpy"),
