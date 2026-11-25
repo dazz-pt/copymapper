@@ -355,9 +355,11 @@ final class RedefinesResolver {
         }
         List<SubTypeEntry> entries = new ArrayList<>();
         for (DataItem alternative : all) {
+            // A Java name of the alternative replaces the class name of the decision.
             String name = classNames.getOrDefault(alternative,
                 mapper.names.className(alternative.name()));
-            ModelMapper.ClassBuilder sub = mapper.newClass(name, owner.name, ClassKind.SUBTYPE);
+            ModelMapper.ClassBuilder sub = mapper.newClass(alternative, name, owner.name,
+                ClassKind.SUBTYPE);
             sub.superclass = owner.name;
             sub.order = owner.order;
             sub.used.addAll(owner.used);

@@ -150,6 +150,27 @@ class CopyMapperCopybookPluginTest {
     }
 
     @Test
+    void specsAreAlwaysInputs() throws IOException {
+        write("src/main/copybook/ORDER.cpy");
+        write("src/main/copybook/ORDER.mapping.json");
+        write("src/main/copybook/billing/INVOICE.mapping.json");
+        write("src/main/copybook/billing/INVOICE.json");
+        write("src/main/copybook/members/ADDRESS.mapping.json");
+        GenerateCopybookClasses task = task();
+        spec().include("**/*.cob");
+        spec().exclude("members/**");
+        assertThat(copybookNames(task)).containsExactlyInAnyOrder("ORDER.mapping.json",
+            "INVOICE.mapping.json");
+    }
+
+    @Test
+    void specsAreAlsoOptionsFilesForTheUpToDateCheck() throws IOException {
+        write("src/main/copybook/ORDER.mapping.json");
+        assertThat(task().getOptionsFiles().getFiles()).extracting(File::getName)
+            .containsExactly("ORDER.mapping.json");
+    }
+
+    @Test
     void optionsFilesAreTheJsonFiles() throws IOException {
         write("src/main/copybook/ORDER.cpy");
         write("src/main/copybook/billing/INVOICE.json");
@@ -208,6 +229,6 @@ class CopyMapperCopybookPluginTest {
         spec().getSourceDir().set(source.toFile());
         spec().getPackageName().set("com.example.mainframe");
         assertThatThrownBy(task::generate).isExactlyInstanceOf(GradleException.class)
-            .hasMessage("2 copybook(s) have errors. See the messages above.");
+            .hasMessage("2 input(s) have errors. See the messages above.");
     }
 }

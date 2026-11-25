@@ -125,7 +125,7 @@ class CopybookTreeTest {
             settings(source, List.of(), BASE, false, false),
             List.of(source.resolve("billing/INVOICE.cpy")), output, log))
             .isInstanceOf(CopybookTreeException.class)
-            .hasMessage("1 copybook(s) have errors. See the messages above.");
+            .hasMessage("1 input(s) have errors. See the messages above.");
         assertThat(log.errors).anySatisfy(e -> assertThat(e)
             .contains("copy member 'ADDRESS' not found"));
     }
@@ -134,7 +134,7 @@ class CopybookTreeTest {
     void reportsErrorsOfAllCopybooks() {
         assertThatThrownBy(() -> run("broken", List.of(), BASE, false, false))
             .isInstanceOf(CopybookTreeException.class)
-            .hasMessage("2 copybook(s) have errors. See the messages above.");
+            .hasMessage("2 input(s) have errors. See the messages above.");
         assertThat(log.errors).anySatisfy(e -> assertThat(e).contains("BAD.cpy"));
         assertThat(log.errors).anySatisfy(e -> assertThat(e).contains("WORSE.cpy"));
         assertThat(output).isEmptyDirectory();
@@ -248,7 +248,7 @@ class CopybookTreeTest {
     void invalidJsonGivesTheFilePath() {
         assertThatThrownBy(() -> run("badjson", List.of(), BASE, false, false))
             .isInstanceOf(CopybookTreeException.class)
-            .hasMessage("1 copybook(s) have errors. See the messages above.");
+            .hasMessage("1 input(s) have errors. See the messages above.");
         assertThat(log.errors).singleElement().asString()
             .startsWith(work.resolve("badjson/SHIPMENT.json") + ": ");
     }
@@ -266,7 +266,7 @@ class CopybookTreeTest {
             settings(source, List.of(), BASE, false, false),
             List.of(source.resolve("SHIPMENT.cpy")), output, log))
             .isInstanceOf(CopybookTreeException.class)
-            .hasMessage("1 copybook(s) have errors. See the messages above.");
+            .hasMessage("1 input(s) have errors. See the messages above.");
         assertThat(log.errors).singleElement().asString()
             .startsWith(source.resolve("SHIPMENT.json") + ": cannot read the file: ");
         assertThat(CopybookTree.configCopyDirs(List.of(source.resolve("SHIPMENT.cpy"))))
@@ -293,7 +293,7 @@ class CopybookTreeTest {
             settings(source, List.of(), BASE, false, false),
             List.of(source.resolve("SHIPMENT.cpy")), output, log))
             .isInstanceOf(CopybookTreeException.class)
-            .hasMessage("1 copybook(s) have errors. See the messages above.");
+            .hasMessage("1 input(s) have errors. See the messages above.");
         assertThat(log.errors).containsExactly("SHIPMENT.cpy: the package 'com.my-co.shipping'"
             + " is not a valid Java package name");
     }
@@ -396,6 +396,275 @@ class CopybookTreeTest {
             .isEqualTo(Path.of("a/ORDER.json"));
         assertThat(CopybookTree.optionsFile(Path.of("ORDER")))
             .isEqualTo(Path.of("ORDER.json"));
+    }
+
+    /** Gives the copybooks and the mapping specs of a tree, as the plugins find them. */
+    private static List<Path> inputs(Path source) throws IOException {
+        try (java.util.stream.Stream<Path> files = Files.walk(source)) {
+            return files.filter(f -> f.toString().endsWith(".cpy")
+                || f.toString().endsWith(".mapping.json")).sorted().toList();
+        }
+    }
+
+    private Path spec() {
+        return TestCopybooks.copy("spec", work);
+    }
+
+    @Test
+    void specIncludePatternFindsTheSpecs() {
+        assertThat(CopybookTree.SPEC_INCLUDE).isEqualTo("**/*.mapping.json");
+    }
+
+    @Test
+    void isSpecIgnoresTheCase() {
+        assertThat(CopybookTree.isSpec(Path.of("a/ORDER.mapping.json"))).isTrue();
+        assertThat(CopybookTree.isSpec(Path.of("ORDER.MAPPING.JSON"))).isFalse();
+        assertThat(CopybookTree.isSpec(Path.of("ORDER.Mapping.json"))).isFalse();
+        assertThat(CopybookTree.isSpec(Path.of("ORDER.json"))).isFalse();
+        assertThat(CopybookTree.isSpec(Path.of("ORDER.mapping.cpy"))).isFalse();
+        assertThat(CopybookTree.isSpec(Path.of("mapping.json"))).isFalse();
+        assertThat(CopybookTree.isSpec(Path.of(".mapping.json"))).isFalse();
+        assertThat(CopybookTree.isSpec(Path.of("A.mapping.json"))).isTrue();
+    }
+
+    @Test
+    void optionsFileOfASpec() {
+        assertThat(CopybookTree.optionsFile(Path.of("a/ORDER.mapping.json")))
+            .isEqualTo(Path.of("a/ORDER.json"));
+        assertThat(CopybookTree.optionsFile(Path.of("a/ORDER.MAPPING.JSON")))
+            .isEqualTo(Path.of("a/ORDER.MAPPING.json"));
+    }
+
+    @Test
+    void specNextToACopybookReplacesIt() throws IOException {
+        Path source = spec();
+        CopybookTree.run(settings(source, List.of(), BASE, false, false), inputs(source),
+            output, log);
+        assertThat(log.errors).isEmpty();
+        assertThat(output.resolve("com/example/ordering/Order.java")).content()
+            .contains("orderId", "05 AMOUNT PIC S9(7)V99 COMP-3.");
+    }
+
+    @Test
+    void specReplacesACopybookAlsoWhenTheListHasOnlyTheCopybook() throws IOException {
+        Path source = spec();
+        CopybookTree.run(settings(source, List.of(), BASE, false, false),
+            List.of(source.resolve("orders/ORDER.cpy")), output, log);
+        assertThat(log.errors).isEmpty();
+        assertThat(output.resolve("com/example/ordering/Order.java")).exists();
+        assertThat(output.resolve("com/example/mainframe/payments/Payment.java"))
+            .doesNotExist();
+    }
+
+    @Test
+    void anExcludedSpecNextToASelectedCopybookIsStillUsed() throws IOException {
+        Path source = spec();
+        List<Path> selected = inputs(source).stream()
+            .filter(file -> !file.endsWith("orders/ORDER.mapping.json")).toList();
+        assertThat(selected).contains(source.resolve("orders/ORDER.cpy"));
+        CopybookTree.run(settings(source, List.of(), BASE, false, false), selected, output,
+            log);
+        assertThat(log.errors).isEmpty();
+        assertThat(output.resolve("com/example/ordering/Order.java")).content()
+            .contains("orderId");
+    }
+
+    @Test
+    void theCopybookThatASpecReplacesHasAnError() throws IOException {
+        Path source = spec();
+        Path alone = Files.createDirectories(work.resolve("alone"));
+        Path order = Files.copy(source.resolve("orders/ORDER.cpy"), alone.resolve("ORDER.cpy"));
+        assertThatThrownBy(() -> CopybookTree.run(
+            settings(alone, List.of(), BASE, false, false), List.of(order), output, log))
+            .isInstanceOf(CopybookTreeException.class);
+    }
+
+    @Test
+    void specAloneIsAnInput() throws IOException {
+        Path source = spec();
+        CopybookTree.run(settings(source, List.of(), BASE, false, false),
+            List.of(source.resolve("payments/PAYMENT.mapping.json")), output, log);
+        assertThat(output.resolve("com/example/mainframe/payments/Payment.java")).content()
+            .contains("paymentId");
+    }
+
+    @Test
+    void specWithPackagePerCopybookUsesTheBaseName() throws IOException {
+        Path source = spec();
+        CopybookTree.run(settings(source, List.of(), BASE, false, true), inputs(source),
+            output, log);
+        assertThat(output.resolve("com/example/mainframe/payments/payment/Payment.java"))
+            .exists();
+    }
+
+    @Test
+    void maxRecordLengthOfTheSettingsAppliesToASpec() throws IOException {
+        Path source = spec();
+        CopybookTree.run(settings(source, List.of(), BASE, false, false, 4), inputs(source),
+            output, log);
+        assertThat(log.warnings).contains("payments/PAYMENT.mapping.json: PAYMENT.cpy:1:8:"
+            + " warning: record PAYMENT has 8 bytes, more than the maximum record length of 4"
+            + " bytes.");
+        assertThat(output.resolve("com/example/mainframe/payments/Payment.java")).exists();
+    }
+
+    @Test
+    void aDirectoryWithTheSpecNameIsNotASpec() throws IOException {
+        Path source = Files.createDirectories(work.resolve("directory"));
+        Files.writeString(source.resolve("PAY.cpy"),
+            "       01  PAY-RECORD.\n           05  PAY-ID               PIC X(4).\n");
+        Files.createDirectories(source.resolve("PAY.mapping.json"));
+        CopybookTree.run(settings(source, List.of(), BASE, false, false),
+            List.of(source.resolve("PAY.cpy")), output, log);
+        assertThat(log.errors).isEmpty();
+        assertThat(output.resolve("com/example/mainframe/PayRecord.java")).exists();
+    }
+
+    @Test
+    void anUpperCaseSpecNameIsNotASpec() throws IOException {
+        Path source = Files.createDirectories(work.resolve("upper"));
+        Files.writeString(source.resolve("PAY.cpy"),
+            "       01  PAY-RECORD.\n           05  PAY-ID               PIC X(4).\n");
+        Files.copy(TestCopybooks.copy("spec", work).resolve("payments/PAYMENT.mapping.json"),
+            source.resolve("PAY.MAPPING.JSON"));
+        CopybookTree.run(settings(source, List.of(), BASE, false, false),
+            List.of(source.resolve("PAY.cpy")), output, log);
+        assertThat(log.errors).isEmpty();
+        assertThat(output.resolve("com/example/mainframe/PayRecord.java")).exists();
+        assertThat(output.resolve("com/example/mainframe/Payment.java")).doesNotExist();
+    }
+
+    @Test
+    void specDiagnosticsNameTheSpec() throws IOException {
+        Path source = spec();
+        CopybookTree.run(settings(source, List.of(), BASE, false, false), inputs(source),
+            output, log);
+        assertThat(log.warnings).singleElement().asString()
+            .startsWith("payments/PAYMENT.mapping.json: PAYMENT.cpy:3:12: warning:")
+            .contains("PAYMENT-NUMBER redefines PAYMENT-ID and is skipped");
+        assertThat(log.infos).contains("payments/PAYMENT.mapping.json: PAYMENT.cpy:1:8: info:"
+            + " record PAYMENT has 8 bytes");
+    }
+
+    @Test
+    void specOptionsFileSetsThePackageAndLombok() throws IOException {
+        Path source = spec();
+        Files.writeString(source.resolve("payments/PAYMENT.json"),
+            "{\"package\": \"com.example.payments\", \"lombok\": true}");
+        CopybookTree.run(settings(source, List.of(), BASE, false, false), inputs(source),
+            output, log);
+        assertThat(output.resolve("com/example/payments/Payment.java")).content()
+            .contains("lombok");
+    }
+
+    @Test
+    void settingsLombokAppliesToASpec() throws IOException {
+        Path source = spec();
+        CopybookTree.run(settings(source, List.of(), BASE, true, false), inputs(source),
+            output, log);
+        assertThat(output.resolve("com/example/mainframe/payments/Payment.java")).content()
+            .contains("lombok");
+    }
+
+    @Test
+    void specOptionsFileWithAMappingKeyFails() throws IOException {
+        Path source = spec();
+        Files.writeString(source.resolve("orders/ORDER.json"),
+            "{\"package\": \"com.example.ordering\", \"stripPrefixes\": [\"WS-\"]}");
+        assertThatThrownBy(() -> CopybookTree.run(
+            settings(source, List.of(), BASE, false, false), inputs(source), output, log))
+            .isInstanceOf(CopybookTreeException.class)
+            .hasMessage("1 input(s) have errors. See the messages above.");
+        assertThat(log.errors).containsExactly(source.resolve("orders/ORDER.json")
+            + ": the options of a mapping spec permit only the keys package and lombok, not"
+            + " 'stripPrefixes'");
+        assertThat(output).isEmptyDirectory();
+    }
+
+    @Test
+    void unreadableSpecOptionsFileGivesTheFilePath() throws IOException {
+        Path source = spec();
+        Files.write(source.resolve("orders/ORDER.json"), new byte[] {'{', (byte) 0xFF, '}'});
+        assertThatThrownBy(() -> CopybookTree.run(
+            settings(source, List.of(), BASE, false, false), inputs(source), output, log))
+            .isInstanceOf(CopybookTreeException.class);
+        assertThat(log.errors).singleElement().asString()
+            .startsWith(source.resolve("orders/ORDER.json") + ": cannot read the file: ");
+    }
+
+    @Test
+    void invalidSpecGivesTheFilePath() throws IOException {
+        Path source = spec();
+        Files.writeString(source.resolve("payments/PAYMENT.mapping.json"), "{\"formatVersion\": 9}");
+        assertThatThrownBy(() -> CopybookTree.run(
+            settings(source, List.of(), BASE, false, false), inputs(source), output, log))
+            .isInstanceOf(CopybookTreeException.class)
+            .hasMessage("1 input(s) have errors. See the messages above.");
+        assertThat(log.errors).singleElement().asString()
+            .startsWith("payments/PAYMENT.mapping.json: ");
+    }
+
+    @Test
+    void unreadableSpecGivesTheFilePath() throws IOException {
+        Path source = spec();
+        Files.write(source.resolve("payments/PAYMENT.mapping.json"),
+            new byte[] {'{', (byte) 0xFF, '}'});
+        assertThatThrownBy(() -> CopybookTree.run(
+            settings(source, List.of(), BASE, false, false), inputs(source), output, log))
+            .isInstanceOf(CopybookTreeException.class);
+        assertThat(log.errors).singleElement().asString()
+            .startsWith("payments/PAYMENT.mapping.json: cannot read the file: ");
+    }
+
+    @Test
+    void specWithATranslationErrorFails() throws IOException {
+        Path source = spec();
+        Path payment = source.resolve("payments/PAYMENT.mapping.json");
+        Files.writeString(payment, Files.readString(payment)
+            .replace("\"jsonName\":\"paymentId\"", "\"javaName\":\"class\",\"jsonName\":\"paymentId\""));
+        assertThatThrownBy(() -> CopybookTree.run(
+            settings(source, List.of(), BASE, false, false), inputs(source), output, log))
+            .isInstanceOf(CopybookTreeException.class)
+            .hasMessage("1 input(s) have errors. See the messages above.");
+        assertThat(log.errors).singleElement().asString()
+            .startsWith("payments/PAYMENT.mapping.json: PAYMENT.cpy:2:12: error: ");
+        assertThat(output).isEmptyDirectory();
+    }
+
+    @Test
+    void specAndCopybookCollide() throws IOException {
+        Path source = spec();
+        Files.copy(source.resolve("payments/PAYMENT.mapping.json"),
+            source.resolve("payments/OTHER.mapping.json"));
+        assertThatThrownBy(() -> CopybookTree.run(
+            settings(source, List.of(), BASE, false, false), inputs(source), output, log))
+            .isInstanceOf(CopybookTreeException.class)
+            .hasMessageContaining("class com.example.mainframe.payments.Payment comes from"
+                + " payments/OTHER.mapping.json and payments/PAYMENT.mapping.json");
+    }
+
+    @Test
+    void copybookNamedLikeASpecHasNoOptionsFile() throws IOException {
+        Path source = Files.createDirectories(work.resolve("names"));
+        Files.writeString(source.resolve("PAY.mapping.cpy"),
+            "       01  PAY-RECORD.\n           05  PAY-ID               PIC X(4).\n");
+        Files.copy(TestCopybooks.copy("spec", work).resolve("payments/PAYMENT.mapping.json"),
+            source.resolve("PAY.mapping.json"));
+        CopybookTree.run(settings(source, List.of(), BASE, false, false), inputs(source),
+            output, log);
+        assertThat(log.errors).isEmpty();
+        assertThat(output.resolve("com/example/mainframe/PayRecord.java")).exists();
+        assertThat(output.resolve("com/example/mainframe/Payment.java")).exists();
+        assertThat(CopybookTree.configCopyDirs(List.of(source.resolve("PAY.mapping.cpy"))))
+            .isEmpty();
+    }
+
+    @Test
+    void configCopyDirsSkipsTheSpecsAndTheCopybooksThatTheyReplace() throws IOException {
+        Path source = spec();
+        Files.writeString(source.resolve("orders/ORDER.json"), "{\"copyDirs\": [\"lib\"]}");
+        Files.writeString(source.resolve("payments/PAYMENT.json"), "{\"copyDirs\": [\"lib\"]}");
+        assertThat(CopybookTree.configCopyDirs(inputs(source))).isEmpty();
     }
 
     private static final class RecordingLog implements CopybookTree.Log {

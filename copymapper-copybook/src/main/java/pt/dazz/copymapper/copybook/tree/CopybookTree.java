@@ -6,10 +6,14 @@ import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Stream;
 import javax.lang.model.SourceVersion;
 import pt.dazz.copymapper.copybook.Copybooks;
@@ -22,12 +26,24 @@ import pt.dazz.copymapper.copybook.generate.JavaClassGenerator;
 import pt.dazz.copymapper.copybook.json.ModelJsonException;
 import pt.dazz.copymapper.copybook.map.MappingOptions;
 import pt.dazz.copymapper.copybook.parse.ParseOptions;
+import pt.dazz.copymapper.copybook.spec.MappingSpecFormatException;
+import pt.dazz.copymapper.copybook.spec.MappingSpecJson;
 
 /**
  * Runs the copybook generator for a list of copybooks in a directory tree. The build plugins
  * (Gradle and Maven) use this class. It uses no build tool API.
+ *
+ * <p>An input is a copybook or a mapping spec ({@code <NAME>.mapping.json}). A mapping spec
+ * next to the copybook {@code <NAME>.<ext>} replaces that copybook and its options file: the
+ * class does not read the copybook. The options file {@code <NAME>.json} of a mapping spec can
+ * set only {@code package} and {@code lombok}.
  */
 public final class CopybookTree {
+
+    /** The include pattern of the mapping specs. The plugins always add it to the includes. */
+    public static final String SPEC_INCLUDE = "**/*.mapping.json";
+
+    private static final String SPEC_SUFFIX = ".mapping.json";
 
     private CopybookTree() {
     }
@@ -103,7 +119,8 @@ public final class CopybookTree {
      * output directory. It writes no file if a copybook has an error.
      *
      * @param settings the settings
-     * @param copybooks the copybook files, below the source directory
+     * @param copybooks the copybook files and the mapping spec files, below the source
+     *     directory
      * @param outputDir the directory for the Java files
      * @param log the receiver of the diagnostics
      * @throws IOException if a file cannot be read or written
@@ -118,7 +135,7 @@ public final class CopybookTree {
                 + maxRecordLength + ".");
         }
         clean(outputDir);
-        List<Path> sorted = copybooks.stream()
+        List<Path> sorted = inputs(copybooks).stream()
             .sorted(Comparator.comparing(c -> relative(settings.sourceDir(), c))).toList();
         List<Generated> generated = new ArrayList<>();
         int failed = 0;
@@ -132,7 +149,7 @@ public final class CopybookTree {
         }
         if (failed > 0) {
             throw new CopybookTreeException(failed
-                + " copybook(s) have errors. See the messages above.");
+                + " input(s) have errors. See the messages above.");
         }
         checkCollisions(settings, generated);
         for (Generated result : generated) {
@@ -142,14 +159,18 @@ public final class CopybookTree {
 
     /**
      * Gives the copy directories that the options files of the copybooks declare. The method
-     * ignores an options file that is not valid: {@link #run} reports it.
+     * ignores an options file that is not valid: {@link #run} reports it. A mapping spec, and
+     * a copybook that a mapping spec replaces, give no copy directory.
      *
-     * @param copybooks the copybook files
+     * @param copybooks the copybook files and the mapping spec files
      * @return the copy directories, as absolute paths
      */
     public static List<Path> configCopyDirs(List<Path> copybooks) {
         List<Path> dirs = new ArrayList<>();
-        for (Path copybook : copybooks) {
+        for (Path copybook : inputs(copybooks)) {
+            if (isSpec(copybook)) {
+                continue;
+            }
             try {
                 GeneratorConfig config = readConfig(copybook);
                 if (config != null) {
@@ -163,16 +184,53 @@ public final class CopybookTree {
     }
 
     /**
-     * Gives the options file of a copybook: {@code <NAME>.json} next to {@code <NAME>.cpy}.
+     * Gives the options file of a copybook or of a mapping spec: {@code <NAME>.json} next to
+     * {@code <NAME>.cpy} or {@code <NAME>.mapping.json}.
      *
-     * @param copybook the copybook file
+     * @param copybook the copybook file or the mapping spec file
      * @return the options file, which can be missing
      */
     public static Path optionsFile(Path copybook) {
         return copybook.resolveSibling(baseName(copybook) + ".json");
     }
 
-    /** Generates one copybook. Gives {@code null} if the copybook has an error. */
+    /**
+     * Tells if a file is a mapping spec: its name ends with {@code .mapping.json}, in lower
+     * case, after a base name that is not empty. The check is case-sensitive, as the scan of
+     * the plugins.
+     *
+     * @param file the file
+     * @return {@code true} for a mapping spec
+     */
+    public static boolean isSpec(Path file) {
+        String name = file.getFileName().toString();
+        return name.length() > SPEC_SUFFIX.length() && name.endsWith(SPEC_SUFFIX);
+    }
+
+    /**
+     * Replaces each copybook that has a mapping spec next to it with that spec, and removes
+     * the duplicates.
+     */
+    private static List<Path> inputs(List<Path> files) {
+        Set<Path> inputs = new LinkedHashSet<>();
+        for (Path file : files) {
+            Path spec = file.resolveSibling(baseName(file) + SPEC_SUFFIX);
+            inputs.add(!isSpec(file) && exists(spec) ? spec : file);
+        }
+        return List.copyOf(inputs);
+    }
+
+    /**
+     * Tells if a file exists with exactly this name. On a file system that ignores the case,
+     * {@code X.MAPPING.JSON} also matches {@code X.mapping.json}; the real name must match.
+     */
+    private static boolean exists(Path file) {
+        String[] names = file.toAbsolutePath().getParent().toFile().list();
+        return Arrays.asList(Objects.requireNonNullElse(names, new String[0]))
+            .contains(file.getFileName().toString()) && Files.isRegularFile(file);
+    }
+
+    /** Generates one copybook or mapping spec. Gives {@code null} if the input has an error. */
     private static Generated generate(Settings settings, Path copybook, Log log)
         throws IOException {
         GeneratorConfig config;
@@ -193,6 +251,37 @@ public final class CopybookTree {
         }
         boolean lombok = config != null && config.lombok() != null ? config.lombok()
             : settings.lombok();
+        GenerateOptions options = new GenerateOptions(packageName, lombok);
+        String prefix = "";
+        Copybooks.Result result;
+        if (isSpec(copybook)) {
+            prefix = relative(settings.sourceDir(), copybook) + ": ";
+            result = generateSpec(copybook, settings.maxRecordLength(), options, prefix, log);
+            if (result == null) {
+                return null;
+            }
+        } else {
+            result = generateCopybook(settings, copybook, config, options);
+        }
+        for (Diagnostic diagnostic : result.diagnostics()) {
+            String message = prefix + diagnostic.format();
+            if (diagnostic.severity() == Severity.ERROR) {
+                log.error(message);
+            } else if (diagnostic.severity() == Severity.WARNING) {
+                log.warn(message);
+            } else {
+                log.info(message);
+            }
+        }
+        if (result.hasErrors()) {
+            return null;
+        }
+        return new Generated(relative(settings.sourceDir(), copybook), result.files());
+    }
+
+    private static Copybooks.Result generateCopybook(Settings settings, Path copybook,
+                                                     GeneratorConfig config,
+                                                     GenerateOptions options) {
         ParseOptions fileParse = config == null ? ParseOptions.defaults() : config.parse();
         List<Path> copyDirs = new ArrayList<>(fileParse.copyDirs());
         copyDirs.addAll(settings.copyDirs());
@@ -205,21 +294,22 @@ public final class CopybookTree {
                 : settings.maxRecordLength(),
             file.dates(), file.continuable(), file.validatable(), file.conditions(),
             file.emptyItems(), file.emptyKeys(), file.partialTables(), file.views());
-        Copybooks.Result result = Copybooks.generate(copybook, parse, mapping,
-            new GenerateOptions(packageName, lombok));
-        for (Diagnostic diagnostic : result.diagnostics()) {
-            if (diagnostic.severity() == Severity.ERROR) {
-                log.error(diagnostic.format());
-            } else if (diagnostic.severity() == Severity.WARNING) {
-                log.warn(diagnostic.format());
-            } else {
-                log.info(diagnostic.format());
-            }
+        return Copybooks.generate(copybook, parse, mapping, options);
+    }
+
+    /** Reads and generates a mapping spec. Gives {@code null} if the file is not valid. */
+    private static Copybooks.Result generateSpec(Path spec, Integer maxRecordLength,
+                                                 GenerateOptions options, String prefix,
+                                                 Log log) {
+        try {
+            return Copybooks.generate(MappingSpecJson.read(Files.readString(spec)),
+                maxRecordLength, options);
+        } catch (MappingSpecFormatException e) {
+            log.error(prefix + e.getMessage());
+        } catch (IOException e) {
+            log.error(prefix + "cannot read the file: " + e.getMessage());
         }
-        if (result.hasErrors()) {
-            return null;
-        }
-        return new Generated(relative(settings.sourceDir(), copybook), result.files());
+        return null;
     }
 
     private static String packageName(Settings settings, Path copybook,
@@ -237,15 +327,20 @@ public final class CopybookTree {
     }
 
     /**
-     * Reads the options file of a copybook. Gives {@code null} if the file does not exist. An
-     * invalid path in {@code copyDirs} gives a {@link ModelJsonException}.
+     * Reads the options file of a copybook or of a mapping spec. Gives {@code null} if the
+     * file does not exist, or if it is a mapping spec (the options file of a copybook with the
+     * name {@code <NAME>.mapping.cpy}). An invalid path in {@code copyDirs} gives a
+     * {@link ModelJsonException}.
      */
     private static GeneratorConfig readConfig(Path copybook) throws IOException {
         Path file = optionsFile(copybook);
-        if (!Files.isRegularFile(file)) {
+        if (isSpec(file) || !Files.isRegularFile(file)) {
             return null;
         }
         String text = Files.readString(file);
+        if (isSpec(copybook)) {
+            return GeneratorConfigJson.readSpecOptions(text);
+        }
         try {
             return GeneratorConfigJson.read(text, file.toAbsolutePath().getParent());
         } catch (InvalidPathException e) {
@@ -301,7 +396,7 @@ public final class CopybookTree {
     public static String relativePath(Path base, Path file) {
         Path from = base.toAbsolutePath().normalize();
         Path to = file.toAbsolutePath().normalize();
-        Path path = java.util.Objects.equals(from.getRoot(), to.getRoot())
+        Path path = Objects.equals(from.getRoot(), to.getRoot())
             ? from.relativize(to) : to;
         return path.toString().replace('\\', '/');
     }
@@ -312,6 +407,9 @@ public final class CopybookTree {
 
     private static String baseName(Path file) {
         String name = file.getFileName().toString();
+        if (isSpec(file)) {
+            return name.substring(0, name.length() - SPEC_SUFFIX.length());
+        }
         int dot = name.lastIndexOf('.');
         return dot < 0 ? name : name.substring(0, dot);
     }

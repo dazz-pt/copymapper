@@ -88,7 +88,7 @@ If `sourceDir` does not exist, or if it has no copybook, the task generates no c
 
 The task writes each diagnostic of the generator to the build log, in the format `<file>:<line>:<column>: <severity>: <message>`.
 Errors have the level ERROR. Warnings and infos both have the level WARN.
-The task checks all copybooks before it fails. Then the build fails with `N copybook(s) have errors. See the messages above.`
+The task checks all copybooks and mapping specs before it fails. Then the build fails with `N input(s) have errors. See the messages above.`
 The task checks for class name collisions only when no copybook has an error.
 If a copybook has an error, the task writes no file. Thus, after a failure, `outputDir` is empty.
 

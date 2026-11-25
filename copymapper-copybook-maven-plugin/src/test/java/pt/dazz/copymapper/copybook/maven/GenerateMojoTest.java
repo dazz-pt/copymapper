@@ -164,7 +164,7 @@ class GenerateMojoTest {
         TestCopybooks.copy("broken", source);
         mojo.sourceDir = source.toFile();
         assertThatThrownBy(mojo::execute).isExactlyInstanceOf(MojoFailureException.class)
-            .hasMessage("2 copybook(s) have errors. See the messages above.");
+            .hasMessage("2 input(s) have errors. See the messages above.");
         assertThat(log.warnings).anySatisfy(w -> assertThat(w).contains("is skipped"));
         assertThat(log.errors).hasSize(2);
         assertThat(log.infos).anySatisfy(i -> assertThat(i)
@@ -234,6 +234,62 @@ class GenerateMojoTest {
         assertThat(Files.readString(fingerprint())).isNotEqualTo(before);
         assertThat(out("com/example/mainframe/Account.java")).content()
             .contains("bankCountry");
+    }
+
+    @Test
+    void specGeneratesTheClassesAndReplacesTheCopybook() throws Exception {
+        mojo.sourceDir = TestCopybooks.copy("spec", dir).toFile();
+        mojo.execute();
+        assertThat(log.errors).isEmpty();
+        assertThat(out("com/example/ordering/Order.java")).content().contains("orderId");
+        assertThat(out("com/example/mainframe/payments/Payment.java")).exists();
+    }
+
+    @Test
+    void specsAreInputsWithOtherIncludesAndObeyTheExcludes() throws Exception {
+        mojo.sourceDir = TestCopybooks.copy("spec", dir).toFile();
+        mojo.includes = List.of("**/*.cob");
+        mojo.excludes = List.of("orders/**");
+        mojo.execute();
+        assertThat(out("com/example/mainframe/payments/Payment.java")).exists();
+        assertThat(out("com/example/ordering/Order.java")).doesNotExist();
+    }
+
+    @Test
+    void anExcludedSpecNextToASelectedCopybookIsStillUsed() throws Exception {
+        mojo.sourceDir = TestCopybooks.copy("spec", dir).toFile();
+        mojo.excludes = List.of("**/*.mapping.json");
+        mojo.execute();
+        assertThat(log.errors).isEmpty();
+        // ORDER.cpy is not valid, so the class comes from ORDER.mapping.json.
+        assertThat(out("com/example/ordering/Order.java")).content().contains("orderId");
+        assertThat(out("com/example/mainframe/payments/Payment.java")).doesNotExist();
+    }
+
+    @Test
+    void specChangeChangesTheFingerprint() throws Exception {
+        Path source = TestCopybooks.copy("spec", dir);
+        mojo.sourceDir = source.toFile();
+        mojo.execute();
+        String before = Files.readString(fingerprint());
+        Path spec = source.resolve("payments/PAYMENT.mapping.json");
+        Files.writeString(spec, Files.readString(spec).replace("\"cobolName\":\"PAYMENT-ID\",",
+            "\"cobolName\":\"PAYMENT-ID\",\"javaName\":\"reference\","));
+        mojo.execute();
+        assertThat(Files.readString(fingerprint())).isNotEqualTo(before);
+        assertThat(out("com/example/mainframe/payments/Payment.java")).content()
+            .contains("reference");
+    }
+
+    @Test
+    void specOptionsFileWithAMappingKeyFails() throws IOException {
+        Path source = TestCopybooks.copy("spec", dir);
+        mojo.sourceDir = source.toFile();
+        Files.writeString(source.resolve("orders/ORDER.json"), "{\"recordName\": \"ORDER\"}");
+        assertThatThrownBy(mojo::execute).isInstanceOf(MojoFailureException.class);
+        assertThat(log.errors).containsExactly(source.resolve("orders/ORDER.json")
+            + ": the options of a mapping spec permit only the keys package and lombok, not"
+            + " 'recordName'");
     }
 
     @Test

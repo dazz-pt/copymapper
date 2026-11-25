@@ -50,7 +50,8 @@ public abstract class GenerateCopybookClasses extends DefaultTask {
     public abstract DirectoryProperty getSourceDir();
 
     /**
-     * Gives the include patterns. An empty list means {@code **}{@code /*.cpy}.
+     * Gives the include patterns. An empty list means {@code **}{@code /*.cpy}. The task also
+     * reads each {@code **}{@code /*.mapping.json} file that no exclude pattern selects.
      *
      * @return the include patterns
      */
@@ -139,10 +140,11 @@ public abstract class GenerateCopybookClasses extends DefaultTask {
     protected abstract ObjectFactory getObjects();
 
     /**
-     * Gives the copybook files: the files in the source directory that the include and the
-     * exclude patterns select.
+     * Gives the copybook files and the mapping specs: the files in the source directory that
+     * the include patterns or {@code **}{@code /*.mapping.json} select, and that the exclude
+     * patterns do not select.
      *
-     * @return the copybook files
+     * @return the copybook files and the mapping specs
      */
     @InputFiles
     @PathSensitive(PathSensitivity.RELATIVE)
@@ -150,12 +152,14 @@ public abstract class GenerateCopybookClasses extends DefaultTask {
         PatternSet patterns = new PatternSet();
         List<String> includes = getIncludes().get();
         patterns.include(includes.isEmpty() ? List.of("**/*.cpy") : includes);
+        patterns.include(CopybookTree.SPEC_INCLUDE);
         patterns.exclude(getExcludes().get());
         return getSourceDir().getAsFileTree().matching(patterns);
     }
 
     /**
-     * Gives the options files: the {@code .json} files in the source directory.
+     * Gives the options files: the {@code .json} files in the source directory. The mapping
+     * specs are also in this set.
      *
      * @return the options files
      */

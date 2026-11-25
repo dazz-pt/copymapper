@@ -15,6 +15,9 @@ import pt.dazz.copymapper.copybook.model.BookModel;
 import pt.dazz.copymapper.copybook.parse.CopybookParser;
 import pt.dazz.copymapper.copybook.parse.ParseOptions;
 import pt.dazz.copymapper.copybook.parse.ParseResult;
+import pt.dazz.copymapper.copybook.spec.MappingSpec;
+import pt.dazz.copymapper.copybook.spec.SpecTranslator;
+import pt.dazz.copymapper.copybook.spec.Translation;
 
 /**
  * Runs the copybook pipeline: parse, map, and generate. This is the entry point for the
@@ -103,5 +106,71 @@ public final class Copybooks {
      */
     public static Result generate(BookModel model, GenerateOptions generate) {
         return new Result(model, JavaClassGenerator.generate(model, generate), List.of());
+    }
+
+    /**
+     * Translates and maps a mapping spec.
+     *
+     * @param spec the mapping spec
+     * @return the result, without Java files
+     */
+    public static Result toModel(MappingSpec spec) {
+        return toModel(spec, null);
+    }
+
+    /**
+     * Translates and maps a mapping spec, with a check of the record length. An error in the
+     * translation stops the run.
+     *
+     * @param spec the mapping spec
+     * @param maxRecordLength the maximum record length in bytes, or {@code null} for no check.
+     *     A longer record gives a warning.
+     * @return the result, without Java files
+     */
+    public static Result toModel(MappingSpec spec, Integer maxRecordLength) {
+        Translation translation = SpecTranslator.translate(spec);
+        if (translation.hasErrors()) {
+            return new Result(null, List.of(), translation.diagnostics());
+        }
+        MappingOptions o = translation.options();
+        MappingOptions options = new MappingOptions(o.stripPrefixes(), o.inputMarkers(),
+            o.outputMarkers(), o.directions(), o.subTypes(), o.countFields(), maxRecordLength,
+            o.dates(), o.continuable(), o.validatable(), o.conditions(), o.emptyItems(),
+            o.emptyKeys(), o.partialTables(), o.views());
+        MapResult mapped = ModelMapper.map(translation.copybook(), options,
+            translation.javaNames());
+        List<Diagnostic> diagnostics = new ArrayList<>(translation.diagnostics());
+        diagnostics.addAll(mapped.diagnostics());
+        return new Result(mapped.model(), List.of(), diagnostics);
+    }
+
+    /**
+     * Translates, maps, and generates a mapping spec.
+     *
+     * @param spec the mapping spec
+     * @param generate the generate options
+     * @return the result
+     */
+    public static Result generate(MappingSpec spec, GenerateOptions generate) {
+        return generate(spec, null, generate);
+    }
+
+    /**
+     * Translates, maps, and generates a mapping spec, with a check of the record length.
+     *
+     * @param spec the mapping spec
+     * @param maxRecordLength the maximum record length in bytes, or {@code null} for no check.
+     *     A longer record gives a warning.
+     * @param generate the generate options
+     * @return the result
+     */
+    public static Result generate(MappingSpec spec, Integer maxRecordLength,
+                                  GenerateOptions generate) {
+        Result model = toModel(spec, maxRecordLength);
+        if (model.hasErrors()) {
+            return model;
+        }
+        return new Result(model.model(), JavaClassGenerator.generate(model.model(), generate),
+            model.diagnostics());
     }
 }

@@ -1,4 +1,5 @@
       * GET-ORDER: READ ONE ORDER WITH ITS LINES.
+      * THE PLUGIN READS GET-ORDER.mapping.json, NOT THIS FILE.
        01  GET-ORDER.
            05  ORDER-ID                 PIC X(10).
            05  ORDER-TOTAL              PIC S9(7)V99 COMP-3.

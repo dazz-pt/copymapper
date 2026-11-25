@@ -60,7 +60,11 @@ public class GenerateMojo extends AbstractMojo {
     /** The directory for the generated Java files. */
     File outputDir;
 
-    /** The include patterns of the copybook files. The default is {@code **}{@code /*.cpy}. */
+    /**
+     * The include patterns of the copybook files. The default is {@code **}{@code /*.cpy}.
+     * The goal also reads each {@code **}{@code /*.mapping.json} file that no exclude pattern
+     * selects.
+     */
     List<String> includes;
 
     /** The exclude patterns of the files in the source directory that are not copybooks. */
@@ -151,10 +155,15 @@ public class GenerateMojo extends AbstractMojo {
             scan(List.of("**/*.json"), null), dirs);
     }
 
-    /** Gives the copybook files that the include and exclude patterns select. */
+    /**
+     * Gives the copybook files that the include patterns select, and the mapping specs
+     * ({@code **}{@code /*.mapping.json}), without the files that the exclude patterns select.
+     */
     List<Path> copybooks() {
-        return scan(includes == null || includes.isEmpty() ? List.of(DEFAULT_INCLUDE) : includes,
-            excludes);
+        List<String> include = new ArrayList<>(includes == null || includes.isEmpty()
+            ? List.of(DEFAULT_INCLUDE) : includes);
+        include.add(CopybookTree.SPEC_INCLUDE);
+        return scan(include, excludes);
     }
 
     /** Gives the files in the source directory that the patterns select, sorted. */

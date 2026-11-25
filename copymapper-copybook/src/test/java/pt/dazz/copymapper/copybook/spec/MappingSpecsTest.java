@@ -271,6 +271,13 @@ class MappingSpecsTest {
     }
 
     @Test
+    void copiesTheNormalizedDeclaration() {
+        var spec = draft("R", "01 R.", "05 A   PIC X(3)\n   VALUE 'ABC'.");
+        assertThat(at(spec, "R.A").declaration()).isEqualTo("05 A PIC X(3).");
+        assertThat(at(spec, "R").declaration()).isEqualTo("01 R.");
+    }
+
+    @Test
     void keepsSourceLocationAndHash() {
         var one = draft("R", "01 R.", "05 A PIC X(3).", "05 B PIC X(3).");
         var other = draft("R", "01 R.", "05 A PIC X(3).", "05 B PIC X(4).");

@@ -55,12 +55,12 @@ class EndToEndTest {
         }
     }
 
-    private static ParseOptions parseOptions() {
+    static ParseOptions parseOptions() {
         return new ParseOptions(SourceFormat.FIXED, StandardCharsets.UTF_8,
             List.of(copybook("copylib")), null);
     }
 
-    private static MappingOptions mappingOptions(String name) {
+    static MappingOptions mappingOptions(String name) {
         if (name.equals("ORDER-TAXES.cpy")) {
             return new MappingOptions(List.of(), MappingOptions.INPUT_MARKERS,
                 MappingOptions.OUTPUT_MARKERS, Map.of(), Map.of("CARD-DATA",

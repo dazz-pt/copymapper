@@ -52,6 +52,7 @@ A node has these keys, in this order. Each key is optional, except `cobolName`, 
 | `value` | An object with `kind` (`TEXT`, `NUMBER`, or `FIGURATIVE`) and `text`. |
 | `conditions` | A list of objects with `name` and `values`. Each value is an object with `from` and the optional `thru`, as `value`. |
 | `location` | An object with `source`, `line`, and `column`. |
+| `declaration` | The COBOL declaration of the item, as the parser normalizes it. Optional. The generator writes it as the Javadoc of the field. |
 | `blankWhenZero` | `true` for `BLANK WHEN ZERO`. |
 | `edited` | `true` for a picture with edit symbols, for example `ZZ9.99`. |
 | `jsonName` | The JSON name. |
@@ -81,6 +82,21 @@ The draft has a default REST side:
 
 Edit the JSON to change the REST side. The record name can be in any case.
 `DraftOptions` sets the charset. `DraftOptions.defaults()` uses `IBM037`.
+
+## Java classes from a spec
+
+The copybook generator also reads a mapping spec. It writes the annotated Java classes of the record.
+Thus, a generated class and the runtime use the same decisions.
+
+- CLI: `draft <copybook> --record-name <NAME> --output <file.mapping.json>` writes a draft. `generate <file.mapping.json>` writes the classes. See [Copybook generator CLI](Copybook-generator-CLI#draft-a-mapping-spec-and-generate-from-it).
+- Build plugins: put `<NAME>.mapping.json` in the source directory. It replaces `<NAME>.cpy` and its options file. See the [Gradle plugin](Copybook-generator-Gradle-plugin#mapping-specs) and the [Maven plugin](Copybook-generator-Maven-plugin#mapping-specs).
+- Java: `Copybooks.generate(spec, generateOptions)`.
+
+The generator uses the COBOL side, the dates, the table modes, the variants, and the Java names.
+It does not use the JSON names, the directions of the items, the JSON types `TEXT`, `NUMBER`, and `DECIMAL_STRING`, and the counters.
+A `counter` must be the `OCCURS DEPENDING ON` item, else the generator gives an error.
+A decision that the generator cannot use is an error with the path and the source line.
+For the full translation, see [Mapping spec](Copybook-generator#mapping-spec) in the generator page.
 
 ## The layout compiler
 

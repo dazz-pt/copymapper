@@ -61,8 +61,9 @@ final class Fingerprint {
      * @param pluginVersion the plugin version
      * @param parameters the parameter values, in a fixed order; a value can be {@code null}
      * @param sourceDir the source directory
-     * @param copybooks the copybook files, sorted
-     * @param optionsFiles the options files, sorted
+     * @param copybooks the copybook files and the mapping specs, sorted
+     * @param optionsFiles the options files: all {@code .json} files of the source directory,
+     *     the mapping specs included, sorted
      * @param copyDirs the copy directories, in search order
      * @return the hash, as 64 hexadecimal characters
      * @throws IOException if a file cannot be read

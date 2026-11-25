@@ -10,7 +10,8 @@ import javax.lang.model.SourceVersion;
  */
 public final class Names {
 
-    private static final Set<String> JAVA_LANG = Set.of("String", "Object", "Integer", "Long",
+    /** The names of the java.lang classes that a generated class must not shadow. */
+    static final Set<String> JAVA_LANG = Set.of("String", "Object", "Integer", "Long",
         "Number", "Math", "System", "Thread", "Record", "Enum", "Class", "Character", "Boolean",
         "Byte", "Short", "Double", "Float", "Void", "Process", "Runtime", "Package", "Module",
         "Error", "Exception");

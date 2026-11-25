@@ -121,6 +121,7 @@ public final class ModelMapper {
     final List<ClassBuilder> classes = new ArrayList<>();
     final Set<String> classNames = new HashSet<>();
     final Map<DataItem, Placed> placed = new IdentityHashMap<>();
+    final JavaNames javaNames;
     private final RedefinesResolver redefines;
     private DateHints dates;
     /** The handler of the record that the mapper maps now, if the record is Continuable. */
@@ -130,9 +131,11 @@ public final class ModelMapper {
     private final PartialTableResolver partialTables;
     private final ConditionMapper conditions;
 
-    private ModelMapper(Copybook copybook, MappingOptions options) {
+    private ModelMapper(Copybook copybook, MappingOptions options,
+                        Map<DataItem, String> javaNames) {
         this.sourceName = copybook.sourceName();
         this.options = options;
+        this.javaNames = new JavaNames(this, javaNames);
         this.names = new Names(options.stripPrefixes());
         this.index = new ItemIndex(copybook);
         this.redefines = new RedefinesResolver(this);
@@ -150,7 +153,24 @@ public final class ModelMapper {
      * @return the result
      */
     public static MapResult map(Copybook copybook, MappingOptions options) {
-        ModelMapper mapper = new ModelMapper(copybook, options);
+        return map(copybook, options, Map.of());
+    }
+
+    /**
+     * Maps a copybook to a model, with the Java names of a mapping spec. The Java name of a
+     * record, a group with a class, a table, or a {@code REDEFINES} alternative is the class
+     * name. The Java name of another item is the field name. A Java name that is in use in
+     * the same class, or that the mapper cannot use, is an error.
+     *
+     * @param copybook the copybook
+     * @param options the mapping options
+     * @param javaNames the Java names, by item of the copybook (identity keys)
+     * @return the result
+     */
+    public static MapResult map(Copybook copybook, MappingOptions options,
+                                Map<DataItem, String> javaNames) {
+        ModelMapper mapper = new ModelMapper(copybook, options, javaNames);
+        mapper.javaNames.check();
         mapper.redefines.checkDecisions();
         mapper.dates = new DateHints(mapper);
         OperationHandlers handlers = new OperationHandlers(mapper, copybook.records());
@@ -161,8 +181,8 @@ public final class ModelMapper {
         for (DataItem record : copybook.records()) {
             info(mapper, record);
             RecordLength.check(record, options.maxRecordLength(), mapper.diagnostics);
-            ClassBuilder operation = mapper.newClass(mapper.names.className(record.name()),
-                null, ClassKind.OPERATION);
+            ClassBuilder operation = mapper.newClass(record,
+                mapper.names.className(record.name()), null, ClassKind.OPERATION);
             operation.continuable = handlers.continuable(record);
             operation.validatable = handlers.validatable(record);
             mapper.continuable = operation.continuable;
@@ -176,6 +196,7 @@ public final class ModelMapper {
         mapper.emptyItems.checkUnmapped();
         mapper.partialTables.checkAtEnd();
         mapper.partialTables.checkUnmapped();
+        mapper.javaNames.checkUnused();
         BookModel model = new BookModel(BookModel.FORMAT_VERSION, copybook.sourceName(),
             mapper.classes.stream().map(ClassBuilder::build).toList(), mapper.conditions.enums);
         return new MapResult(mapper.diagnostics.hasErrors() ? null : model,
@@ -196,9 +217,12 @@ public final class ModelMapper {
         }
     }
 
-    /** Creates a class with a unique name. The class keeps its place in source order. */
-    ClassBuilder newClass(String base, String parent, ClassKind kind) {
-        ClassBuilder type = new ClassBuilder(uniqueClassName(base, parent), kind);
+    /**
+     * Creates the class of an item. The Java name of the item, or else a unique derived name,
+     * is the class name. The class keeps its place in source order.
+     */
+    ClassBuilder newClass(DataItem item, String base, String parent, ClassKind kind) {
+        ClassBuilder type = new ClassBuilder(javaNames.className(item, base, parent), kind);
         classes.add(type);
         return type;
     }
@@ -288,7 +312,8 @@ public final class ModelMapper {
             ? owner.fieldName("filler" + ++owner.fillers, List.of())
             : owner.fieldName(names.fieldName(item.name()), context.groups());
         int order = owner.nextOrder();
-        ClassBuilder type = newClass(names.className(item.name()), owner.name, ClassKind.GROUP);
+        ClassBuilder type = newClass(item, names.className(item.name()), owner.name,
+            ClassKind.GROUP);
         walk(item.children(), type,
             new Context(usage, context.direction(), context.occurs(), List.of()));
         owner.members.add(new GroupMember(name, order, context.direction(), item.name(),
@@ -298,6 +323,8 @@ public final class ModelMapper {
     /** Maps an elementary item to a field. */
     void field(DataItem item, ClassBuilder owner, Context context, Usage usage,
                String forcedName, String place) {
+        // A table item gives its Java name to the item class, not to the value field.
+        String explicit = forcedName == null ? javaNames.take(item) : null;
         Picture picture = item.picture();
         if (!picture.numeric() && usage != Usage.DISPLAY) {
             error(item, item.name() + " has a text picture and must not have COMP or COMP-3");
@@ -320,6 +347,8 @@ public final class ModelMapper {
         String name;
         if (forcedName != null) {
             name = owner.fieldName(forcedName, List.of());
+        } else if (explicit != null) {
+            name = javaNames.fieldName(item, explicit, owner, context.groups());
         } else if (item.isFiller()) {
             name = owner.fieldName("filler" + ++owner.fillers, List.of());
         } else {
@@ -399,6 +428,8 @@ public final class ModelMapper {
      */
     private void collection(DataItem item, DataItem previous, ClassBuilder owner,
                             Context context, Usage usage, String place) {
+        // Mark the Java name as used before the checks: a table with an error has no class.
+        javaNames.take(item);
         if (context.occurs() != null && item.occurs().dependingOn() != null) {
             error(item, "OCCURS " + item.name() + " DEPENDING ON " + item.occurs().dependingOn()
                 + " is inside OCCURS " + context.occurs() + ". CopyMapper does not support a"
@@ -428,7 +459,8 @@ public final class ModelMapper {
             ? owner.fieldName("filler" + ++owner.fillers, List.of())
             : owner.fieldName(names.fieldName(item.name()), context.groups());
         int order = owner.nextOrder();
-        ClassBuilder type = newClass(names.className(item.name()), owner.name, ClassKind.ITEM);
+        ClassBuilder type = newClass(item, names.className(item.name()), owner.name,
+            ClassKind.ITEM);
         Context inner = new Context(usage, Direction.INPUT_OUTPUT, item.name(), List.of());
         if (item.isGroup()) {
             walk(item.children(), type, inner);

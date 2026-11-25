@@ -74,7 +74,8 @@ public abstract class CopybooksSpec {
 
     /**
      * Gives the include patterns for the copybook files. An empty list means
-     * {@code **}{@code /*.cpy}.
+     * {@code **}{@code /*.cpy}. The plugin also reads each {@code **}{@code /*.mapping.json}
+     * file that no exclude pattern selects.
      *
      * @return the include patterns
      */

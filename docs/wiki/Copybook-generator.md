@@ -39,6 +39,8 @@ copybook ──parse──▶ AST ──map──▶ model (JSON) ──generate
 2. **Map.** The mapper applies the CopyMapper rules: names, Java types, `pic`, `order`, collections, directions, and subtypes. It gives the model.
 3. **Generate.** The generator writes one Java class for each class of the model, with JavaPoet.
 
+A [mapping spec](#mapping-spec) is also an input. The generator changes it to the parse result and the mapping options, then maps and generates.
+
 The model has a stable JSON form with a format version. The same copybook and options always give the same JSON and the same Java.
 The generator does not keep old models and does not compare them. Other tools can keep the JSON files and compare them to find changes in a copybook.
 
@@ -1106,6 +1108,68 @@ Other errors, with the position `<file>:1:1`:
 
 - `continuable: LIST-ORDRS is not a record. Use the name of a level 01 item.`
 - `validatable: 'Return Codes' is not a Java class name`
+
+## Mapping spec
+
+A [mapping spec](Dynamic-runtime#the-mapping-spec) is a second input of the generator. It is a file `<NAME>.mapping.json` with the decisions of one record.
+The interpreted runtime reads the same file. Thus, the generated classes and the runtime use the same decisions.
+
+To make a spec, write a draft with the `draft` command of the [CLI](Copybook-generator-CLI#draft-a-mapping-spec-and-generate-from-it). Then edit the REST side of the draft.
+To generate the classes, give the spec to a tool:
+
+| Tool | Input |
+|---|---|
+| CLI | `generate <file.mapping.json>`. The parse options and the mapping options are not permitted, except `--max-record-length`. `--package`, `--output-dir`, `--lombok`, and `--max-record-length` apply. |
+| Gradle plugin | A file `<NAME>.mapping.json` in `sourceDir`. See [Mapping specs](Copybook-generator-Gradle-plugin#mapping-specs). |
+| Maven plugin | A file `<NAME>.mapping.json` in `sourceDir`. See [Mapping specs](Copybook-generator-Maven-plugin#mapping-specs). |
+| Java API | `Copybooks.generate(MappingSpec spec, GenerateOptions generate)`. |
+
+The generator changes the spec into a copybook and mapping options. Then it runs the same pipeline as for a copybook.
+The COBOL side of each node gives one data item. The REST side gives the options:
+
+| Mapping spec | Option |
+|---|---|
+| `jsonType` `DATE`, `TIME`, or `DATE_TIME`, with a `format` | A [date hint](#date-hints) with the pattern of the `format`. |
+| `table` `COUNT`, with the path of the counter | A [count field](#count-field-of-a-fixed-table). |
+| `table` `SPACES` | An [empty item](#empty-entries-of-a-fixed-table) of spaces. |
+| `table` `KEY`, with the path of the key | An [empty key](#empty-entries-of-a-fixed-table). |
+| `table` `LOW_VALUES` | The default. No option. |
+| `jsonType` `TEXT`, `NUMBER`, or `DECIMAL_STRING` | Not used. The generator gives the Java type from the `PICTURE`. |
+| `counter` | Not used. The generator uses the `OCCURS DEPENDING ON` item as the counter. A `counter` that is not the `DEPENDING ON` item is an error. |
+| A `Discriminator` variant | A [subtype](#subtypes) decision. The `javaName` of an alternative gives its class name. |
+| A `FixedSelection` variant with two different alternatives | A [direction](#directions): `INPUT` for the request alternative, `OUTPUT` for the response alternative. |
+| `javaName` | The class name of the record, of an item with `OCCURS` (the class of its entries), or of an alternative of a `Discriminator` area (a subtype). The field name of another elementary item. A `javaName` on an item that gets no class and no field is an error, for example on a group without `OCCURS`. |
+| `direction` of an item in a `REDEFINES` area | Not used. The variant of the area decides the directions. |
+| `direction` of another item | Not used. In Java, all items occupy their bytes, so the item is `INPUT_OUTPUT`. |
+| `jsonName` | Not used by the generator. The Java names keep the rules of the generator. |
+
+The spec has no name markers. A `REDEFINES` area of groups needs a variant, or the generator gives an error.
+The generator uses a variant only on an area of groups that is not inside an alternative of another area.
+
+A spec gives the same classes as its copybook with the same decisions. These options are not keys of a spec:
+
+| Option | Use in a spec |
+|---|---|
+| `stripPrefixes` | Set the `javaName` of each item. |
+| `inputMarkers`, `outputMarkers` | Set a `FixedSelection` variant on the area. |
+| `continuable`, `validatable` | None. Write a subclass of the generated class. |
+| `conditions` | None. The mapper selects an enum or constants with its default rule. |
+| `partialTables`, `views` | None. |
+
+A decision that the generator cannot use gives an error diagnostic. The diagnostic has the path of the node and the copybook line of the item. Examples:
+
+- A COBOL name or a condition name that is not one COBOL word, for example `KIND X`.
+- A level that is not `01` for the record, or not from `02` to `49` for another item, or not more than the level of the group.
+- An `OCCURS` with a maximum less than 1, or a minimum more than the maximum.
+- A `redefines` that is not a path of the spec and not the name of an earlier sibling. A `dependingOn` that is not a path of the spec and does not name one item of the record.
+- A variant on an area with an elementary alternative, or on an area inside an alternative of another area.
+- A date `jsonType` without a `format`, or a `format` on another `jsonType`.
+- A `Discriminator` that gives two values to one alternative.
+- A `FixedSelection` without a request or a response alternative, or with the same alternative for both.
+- A `javaName` that is not a Java identifier, that is on a `FILLER`, or that is already used in the same class.
+- A decision on an item with a duplicate sibling name, for example `GET-ORDER.CODE#2`. COBOL cannot name that item.
+
+The generator does not write classes for a spec with an error.
 
 ## Model JSON
 

@@ -6,8 +6,8 @@ The plugin has the same rules as the [Gradle plugin](Copybook-generator-Gradle-p
 
 ## What the plugin does
 
-- The goal `generate` scans `src/main/copybook` recursively for `.cpy` files.
-- It generates the classes of each copybook into `target/generated-sources/copybook`.
+- The goal `generate` scans `src/main/copybook` recursively for `.cpy` files and for [mapping specs](#mapping-specs) (`.mapping.json` files).
+- It generates the classes of each copybook and each mapping spec into `target/generated-sources/copybook`.
 - It adds that directory to the compile source roots. The compiler then compiles the classes with the other sources of the module.
 - It skips the generation when no input changed. See [Up-to-date check and skip](#up-to-date-check-and-skip).
 - The plugin does not add dependencies to your project. Add `copymapper-core` and `copymapper-processor` yourself.
@@ -126,7 +126,7 @@ The goal is declared thread-safe. Thus, Maven runs it in a parallel build (`-T`)
 | `packagePerCopybook` | `copymapper.copybook.packagePerCopybook` | `false` | Add one package segment from the copybook name. See [Class name collisions](#class-name-collisions). |
 | `maxRecordLength` | `copymapper.copybook.maxRecordLength` | none | The maximum record length in bytes. A longer record gives a warning. See [Record length](Copybook-generator#record-length). |
 | `outputDir` | `copymapper.copybook.outputDir` | `${project.build.directory}/generated-sources/copybook` | The directory for the generated Java files. |
-| `includes` | none | `**/*.cpy` | The patterns of the copybook files in `sourceDir`. Your patterns replace the default. An empty list uses the default. |
+| `includes` | none | `**/*.cpy` | The patterns of the copybook files in `sourceDir`. Your patterns replace the default. An empty list uses the default. The goal also reads the [mapping specs](#mapping-specs). |
 | `excludes` | none | none | The patterns of the files in `sourceDir` that are not copybooks. |
 | `skip` | `copymapper.copybook.skip` | `false` | Do not generate the classes. |
 
@@ -184,6 +184,32 @@ Mapping options such as `stripPrefixes`, `directions`, `subTypes`, and `countFie
 For example, `countFields` links a count field to a fixed table. See [Count field of a fixed table](Copybook-generator#count-field-of-a-fixed-table).
 
 If the file cannot be read, is not valid JSON, has an unknown key, or has a path in `copyDirs` that is not valid, the build fails. The message starts with the path of the file.
+
+## Mapping specs
+
+A [mapping spec](Dynamic-runtime#the-mapping-spec) is a file `<NAME>.mapping.json`. It holds the decisions of one record, for example the Java names, the dates, and the subtypes.
+Write a draft with the `draft` command of the [CLI](Copybook-generator-CLI#draft-a-mapping-spec-and-generate-from-it). Then edit it and put it in `sourceDir`.
+
+These rules apply:
+
+- A spec `<NAME>.mapping.json` next to a copybook with the same `<NAME>`, for example `<NAME>.cpy`, replaces the copybook and its options file. The goal does not read that copybook.
+- A spec holds one record. A spec next to a copybook with more records replaces all the records of that copybook. The goal generates only the record of the spec.
+- A spec without a copybook next to it is also an input.
+- The goal reads each `**/*.mapping.json` file in `sourceDir`, also when you set `includes`. The `excludes` patterns apply to the specs.
+- To remove a spec next to a copybook from the inputs, exclude the spec and the copybook. If the goal selects the copybook, it uses the spec.
+- The spec gets its package from its directory and from `<NAME>`, with the rules of [Packages from directories](#packages-from-directories).
+- An options file `<NAME>.json` next to a spec can set only `package` and `lombok`. Another key is an error, and the build fails.
+- A file with a name that ends with `.mapping.json`, in lower case, is always a spec. Thus, the file `X.mapping.json` next to a copybook `X.mapping.cpy` is a spec, not the options file of that copybook. To give options to that copybook, rename it, for example to `X-MAPPING.cpy`, and use `X-MAPPING.json`.
+
+```
+src/main/copybook/orders/GET-ORDER.cpy            the goal does not read this file
+src/main/copybook/orders/GET-ORDER.mapping.json   -> package ...orders
+src/main/copybook/orders/GET-ORDER.json           { "package": "com.example.orders" }
+src/main/copybook/billing/GET-INVOICE.mapping.json -> package ...billing
+```
+
+Each message of a spec starts with the path of the spec, relative to `sourceDir`. Then comes the diagnostic with the copybook name and line in the spec. For example: `orders/GET-ORDER.mapping.json: GET-ORDER.cpy:4:12: error: ...`.
+An options file with another key gives this error: `<path>/GET-ORDER.json: the options of a mapping spec permit only the keys package and lombok, not 'dates'`.
 
 ## Class name collisions
 
@@ -243,7 +269,7 @@ Maven has no input and output tracking. The goal does its own check:
 
 - After a successful run, the goal stores a SHA-256 fingerprint of all inputs in `${project.build.directory}/copymapper-copybook/`. Each `outputDir` has its own fingerprint file.
 - The inputs are:
-  - the copybooks and all `.json` files below `sourceDir`. The `excludes` do not apply to the `.json` files;
+  - the copybooks and all `.json` files below `sourceDir`. The mapping specs are `.json` files. The `excludes` do not apply to the `.json` files;
   - the files directly in each copy directory, not in its subdirectories;
   - the order of the copy directories;
   - the parameters `packageName`, `lombok`, `packagePerCopybook`, `maxRecordLength`, `outputDir`, `includes`, and `excludes`;
@@ -307,7 +333,7 @@ Give each execution its own `sourceDir` and its own `outputDir`. Each execution 
 The goal writes each diagnostic of the generator to the Maven log as `[ERROR]`, `[WARNING]`, or `[INFO]`. An `info:` diagnostic shows as `[INFO]`.
 The file in each line is the name of the copybook or of the `COPY` member, without the directory.
 
-- The goal checks all copybooks before it fails. Then the build fails with `N copybook(s) have errors. See the messages above.`
+- The goal checks all copybooks and mapping specs before it fails. Then the build fails with `N input(s) have errors. See the messages above.`
 - The goal checks for class name collisions only when no copybook has an error.
 - A missing `packageName` stops the goal at once.
 - If the goal cannot read an input, the message starts with `Cannot read the inputs of the generation:`.
@@ -397,7 +423,8 @@ The directory [`copymapper-examples-maven-plugin`](https://github.com/dazz-pt/co
 copymapper-examples-maven-plugin/
   pom.xml                                            the parent: pluginManagement
   mainframe-model/
-    src/main/copybook/orders/GET-ORDER.cpy           -> package ...orders
+    src/main/copybook/orders/GET-ORDER.cpy           the source of the mapping spec: the goal does not read it
+    src/main/copybook/orders/GET-ORDER.mapping.json  -> package ...orders, with the Java name totalAmount
     src/main/copybook/billing/GET-INVOICE.cpy        -> package ...billing
     src/main/copybook/billing/GET-INVOICE.json       { "stripPrefixes": ["INV-"], "countFields": {...} }
     src/main/copylib/ADDRESS.cpy                     the COPY member
@@ -423,7 +450,7 @@ copymapper-examples-maven-plugin/mvnw -B -f copymapper-examples-maven-plugin/pom
 | `copy member '...' not found in ...` | Add the directory of the member to `copyDirs`. The search is not recursive. |
 | `Two copybooks generate the same class` | See [Class name collisions](#class-name-collisions). |
 | `copy member '...' not found: no copy directory is set` | Set `copyDirs` in the configuration or in the options file. |
-| `N copybook(s) have errors. See the messages above.` | Read the `[ERROR]` lines above the failure. Each line gives the file, the line, and the column. |
+| `N input(s) have errors. See the messages above.` | Read the `[ERROR]` lines above the failure. Each line gives the file, the line, and the column. |
 | A generated file is missing, but the goal logs `The generated classes are up to date.` | Delete `target/copymapper-copybook/`, or run `mvn clean`. |
 | `No plugin found for prefix 'copymapper-copybook'` | Add `pt.dazz.copymapper` to `<pluginGroups>`, or use the full coordinates. |
 | The generated classes have no codec at runtime | Add `copymapper-processor` to `annotationProcessorPaths` in the module that runs the plugin. |

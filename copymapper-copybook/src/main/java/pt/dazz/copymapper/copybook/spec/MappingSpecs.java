@@ -156,6 +156,7 @@ public final class MappingSpecs {
                     item.value() == null ? null : value(item.value()),
                     item.conditions().stream().map(Draft::condition).toList(),
                     new SourceLocation(item.source(), item.line(), item.column()),
+                    item.declaration(),
                     picture != null && picture.edited() != null
                             && picture.edited().blankWhenZero(),
                     picture != null && picture.editSymbols(), jsonName,

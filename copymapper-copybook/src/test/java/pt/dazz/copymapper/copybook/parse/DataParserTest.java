@@ -7,6 +7,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import pt.dazz.copymapper.cobol.Sign;
 import pt.dazz.copymapper.copybook.ast.Condition;
 import pt.dazz.copymapper.copybook.ast.ConditionValue;
@@ -713,5 +714,17 @@ class DataParserTest {
             "05 B PIC S9(4) COMP SYNC.");
         assertThat(diagnostics.all()).extracting(Diagnostic::message).containsExactly(
             "SYNC adds 1 slack byte before B. The generator adds a FILLER.");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"ORDER-ID", "order-id", "FILLER", "A.B", "1A"})
+    void aWordThatIsNotAClauseIsADataName(String name) {
+        assertThat(DataParser.isDataName(name)).isTrue();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "KIND X", "123", "'A'", "PIC", "COMP-3", "A.", "A\tB"})
+    void aTextThatTheParserReadsAsNoNameIsNotADataName(String name) {
+        assertThat(DataParser.isDataName(name)).isFalse();
     }
 }
